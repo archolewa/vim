@@ -301,13 +301,6 @@ inoremap <c-l> <c-x><c-o>
 " keyword completion
 inoremap <c-j> <c-p>
 
-" Both my vim and gvim have python3 support, but my vim only has python3.
-let g:JavaComplete_UsePython3 = 1
-
-let g:JavaComplete_PomPath="pom.xml"
-
-let g:JavaComplete_LibsPath="~/.m2/repository"
-
 " Close the preview window.
 nnoremap <Space>p :pc<CR>
 " Close all windows but this one.
