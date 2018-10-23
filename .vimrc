@@ -169,9 +169,9 @@ nnoremap <Leader>bu :cs find s <C-R>=expand("<cword>")<CR><CR>:copen<CR><c-w>k<c
 " jump if there is one entry in the list. That, or figure out how to do some
 " inspection to the left and right so that I can apply some heuristics to
 " prefilter out matches.
-nnoremap g] :ltag <C-R><C-W><CR>:lopen<CR><c-w>k<c-o>
+nnoremap g] :ltag <C-R><C-W><CR>:lopen<CR><c-w>k<c-o><c-w>j
 
-" Jump 
+" Jump
 nnoremap <c-]> :ltag <C-R><C-W><cr>
 
 " ---------- Buffer management -----------
@@ -182,11 +182,18 @@ nnoremap <space>d <C-w>c<CR>
 " If you *really* want to close the buffer.
 nnoremap <space>D :bd<CR>
 
-"  Commands for navigating buffers and files using fuzzy matches.
-" Search files.
-nnoremap gt :CtrlPBuffer<CR>
-" Looks through the most recently used files.
-nnoremap gr :CtrlPMRU<CR>
+"  Commands for navigating buffers and files.
+" Regex File search
+nnoremap <Leader>f :e **/<c-f>
+" Regex buffer search.
+nnoremap gt :filter // ls<c-f>BB
+" This allows me to type in the buffer number, and just press enter to jump to
+" that buffer. Pretty sure I never use enter in normal mode (which just behaves
+" like j, so hopefully this won't do anything crazy). The only exception to
+" this is in the command-line window.
+nnoremap <CR> <C-^>
+autocmd CmdwinEnter * nnoremap <CR> <CR>
+autocmd CmdwinLeave * nnoremap <CR> <C-^>
 
 " This will build the project and drop any compilation errors into the quickfix
 " window.
@@ -200,7 +207,7 @@ nnoremap <Leader>yy :let @" = expand("%")
 " Copy just the part of the filename used in maven's test plugin to the
 " clipboard. This is useful for running my java-debug.sh script to start a
 " debugging session with this specification.
-nnoremap <Leader>yt :let @+ = expand("%:t:r")
+nnoremap <Leader>yf :let @+ = expand("%:t:r")<CR>
 
 " ------------ Gulp Commands ---------
 nnoremap <Leader>gt :Dispatch gulp unit -f %<CR>:copen<CR>
@@ -268,8 +275,6 @@ tnoremap <Leader><Esc> <C-\><C-n>
 " the inner vim with j won't kick me out of terminal mode.
 tnoremap <Leader>jj <C-\><C-n>
 
-" Configuration so that I can open git.corp URLS with fugitive
-
 " Remove the background colors when using vimdiff.
 highlight DiffAdd ctermbg=NONE ctermfg=NONE
 highlight DiffDelete ctermbg=NONE ctermfg=Red
@@ -283,11 +288,6 @@ highlight DiffChange guibg=NONE guifg=NONE
 " Some changes to make macros more pleasant
 " Don't render every keystroke of the macro, just the end result
 set lazyredraw
-
-" Fuzzy File search
-nnoremap <Leader>f :CtrlPRoot<CR>
-" Fuzzy file search, but let me provide the directory to use.
-nnoremap <Leader>fd :CtrlP<c-f>
 
 " ----Completions ----
 " We use the default <c-p> for keyword (text) completion. The bindings have
@@ -308,21 +308,6 @@ nnoremap <Space>o :only<CR>
 
 " Show filler lines to keep files synchronized, and open diff split vertically.
 set diffopt=filler,vertical
-
-autocmd FileType javascript nnoremap <Leader>fj :Neoformat<CR>
-
-" Ignore directories when performing file search
-let g:ctrlp_custom_ignore = {'dir': '\v[\/](\.git|target|node_modules)'}
-let g:ctrlp_max_files=0
-if !empty(glob(".git/"))
-    " Use git to find files in git repositories since it's very fast for large
-    " projects.
-    let g:ctrlp_user_command = ['.git/', 'cd %s && git ls-files --exclude-standard -co']
-else
-    " Use another plugin with a faster (but slower than git) CtrlP matcher if
-    " we're not in a git repository.
-    let g:ctrlp_match_func = { 'match': 'pymatcher#PyMatch' }
-endif
 
 " ---- Easytags settings
 " Easytags is convenient, because it auto generates tags for me, and I rely
@@ -457,7 +442,7 @@ augroup END
 
 
 " We have some private things we need (like the URL for corporate
-" git repos), but I don't feel comfortable putting in a public dot file. 
+" git repos), but I don't feel comfortable putting in a public dot file.
 source ~/.vim/private.vim
 
 " Display the current file name.
