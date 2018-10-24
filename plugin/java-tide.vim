@@ -21,24 +21,34 @@
 " user which one they'd like to import. It converts the directory to a package
 " and adds the import to the import section to the appropriate group.
 function! Import(tagidentifier)
-    let chosen_import = SelectImport(tagidentifier)
-    if !chosen_import
+    let chosen_import = SelectImport(a:tagidentifier)
+    if chosen_import == -1
         return
     endif
-    if search("^import " . chosen_import . ";", 'wn')
+    let import_statement = "import " . chosen_import . ";"
+    if search(import_statement, 'wn')
         echo("\rImport " . chosen_import . " already exists.")
         return
     endif
-    let import_groups = GetImportGroups()
+    let cursor_position = getcurpos()
+    let class_start = search('^\(public\|protected\|private\) \(class\|enum\|interface\)', 'w')
+    let class_docs_start = search('/\*\*', 'bWn')
+    call setpos('.', cursor_position)
+    if class_docs_start > 0 
+        let imports_end = class_docs_start
+    else
+        let imports_end = class_start
+    endif
+    let import_groups = GetImportGroups(imports_end)
     " TODO: Relying on just the leading package isn't sufficient for e.g.
     " com.flurry. We'll need to pull off the packages that match an entry
     " in the to-be-defined package ordering, and use that instead.
-    let leadingpackage = split(chosen_import, ".")[0]
+    let leadingpackage = split(chosen_import, '\.')[0]
     let added = 0
-    let import_statement = "import " . chosen_import . ";"
     for group in import_groups
         if len(group) > 0
-            if (split(group[0], ".")[0] ==# leadingpackage
+            " Each statement begins with import, so we need to strip that off.
+            if split(split(group[0])[1], '\.')[0] ==# leadingpackage
                 call sort(add(group, import_statement))
                 let added = 1
                 break
@@ -46,7 +56,7 @@ function! Import(tagidentifier)
         endif
     endfor
     if !added
-        let import_groups = AddNewGroup(import_group, [import_statement])
+        call AddNewGroup(import_groups, [import_statement])
     endif
     let import_statements = []
     for group in import_groups
@@ -55,22 +65,24 @@ function! Import(tagidentifier)
         endfor
         call add(import_statements, '')
     endfor
-    call append(search("^package", 'wn')+1, import_statements)
+    let package_location = search("^package", 'wn')
+    call deletebufline("%", package_location+1, imports_end-1)
+    call append(package_location, import_statements)
 endfunction
 
 " TODO: Enhance this function so that we add the new group in the correct
 " spot in the list relative to the other groups.
 function! AddNewGroup(import_groups, import_group)
-    return add(import_groups, import_group)
+    return add(a:import_groups, a:import_group)
 endfunction
 
 " Given a tagidentifier, asks the user which class they would like to import,
 " and returns the fully qualified class name of the selection.
 function! SelectImport(tagidentifier)
     let tags = taglist('^' . a:tagidentifier . '$')
-    let tags = uniq(filter(tags, 'v:val["kind"] == "c"'))
+    let tags = uniq(filter(tags, 'index(["c", "i", "e"], v:val["kind"]) > -1'))
     let filenames = map(tags, 'v:val["filename"]')
-    let imports = uniq(map(filenames, 'Translate_directory(v:val)'))
+    let imports = uniq(sort(map(filenames, 'Translate_directory(v:val)')))
     if len(imports) == 1
         return imports[0]
     else
@@ -79,7 +91,7 @@ function! SelectImport(tagidentifier)
         let inputstring = "Select class to import: \n" . tagliststring
         let selection = input(inputstring)
         if selection ==# ""
-            return 0
+            return -1
         endif
         return imports[selection]
     endif
@@ -87,9 +99,8 @@ endfunction
 
 " Returns a list of lists. Each list is a group of imports (i.e. a paragraph)
 " pulled from the buffer.
-function! GetImportGroups()
-    let class_start = search("^public|protected|private class", 'wn')
-    let imports = filter(copy(lines(1, class_start)), 'v:val =~ "^import"')
+function! GetImportGroups(imports_end)
+    let imports = filter(copy(getline(1, a:imports_end-1)), 'v:val =~ "^import" || v:val =~ "^$"')
     let importgroups = []
     let currentgroup = []
     for line in imports
