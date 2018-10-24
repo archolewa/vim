@@ -186,14 +186,10 @@ nnoremap <space>D :bd<CR>
 " Regex File search
 nnoremap <Leader>f :e **/<c-f>
 " Regex buffer search.
-nnoremap gt :filter // ls<c-f>BB
-" This allows me to type in the buffer number, and just press enter to jump to
-" that buffer. Pretty sure I never use enter in normal mode (which just behaves
-" like j, so hopefully this won't do anything crazy). The only exception to
-" this is in the command-line window.
-nnoremap <CR> <C-^>
-autocmd CmdwinEnter * nnoremap <CR> <CR>
-autocmd CmdwinLeave * nnoremap <CR> <C-^>
+nnoremap gt :filter ## ls<c-f>BB
+" This allows me to type in the buffer number, and press , to jump to
+" that buffer. I hardly ever use f or t, so I'm not losing much here.
+nnoremap , <C-^>
 
 " This will build the project and drop any compilation errors into the quickfix
 " window.
@@ -463,3 +459,7 @@ function! QuickFixToggle()
         let g:quickfix_is_open = 1
     endif
 endfunction
+
+" Ask the user for which class to import, and appends the import to the import
+" list. The next step is to put it in the correct spot alphabetically.
+nnoremap <Leader>ai :call Import("<C-r><C-w>")<CR>
