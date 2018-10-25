@@ -41,24 +41,7 @@ function! Import(tagidentifier)
         let imports_end = class_start
     endif
     let import_groups = GetImportGroups(imports_end)
-    " TODO: Relying on just the leading package isn't sufficient for e.g.
-    " com.flurry. We'll need to pull off the packages that match an entry
-    " in the to-be-defined package ordering, and use that instead.
-    let leadingpackage = split(chosen_import, '\.')[0]
-    let added = 0
-    for group in import_groups
-        if len(group) > 0
-            " Each statement begins with import, so we need to strip that off.
-            if split(split(group[0])[1], '\.')[0] ==# leadingpackage
-                call sort(add(group, import_statement))
-                let added = 1
-                break
-            endif
-        endif
-    endfor
-    if !added
-        call AddNewGroup(import_groups, [import_statement])
-    endif
+    call addNewImport(import_groups, chosen_import, import_statement)
     let import_statements = []
     for group in import_groups
         for import in group
@@ -72,10 +55,65 @@ function! Import(tagidentifier)
     let @/ = original_search
 endfunction
 
-" TODO: Enhance this function so that we add the new group in the correct
-" spot in the list relative to the other groups.
-function! AddNewGroup(import_groups, import_group)
-    return add(a:import_groups, a:import_group)
+" Takes a list of lists, and a list of strings. Each entry in import_groups 
+" represents an import group. Each entry is a list of the packages that make
+" up that group. For example, {"java", "net"} represents a group of packages
+" that lead with "java.net." The list of strings is a list of packages whose
+" group we'd like to determine.
+" Returns the group that packages is a member of
+function! ExtractGroup(import_groups, packages)
+    for group in a:import_groups
+        if group == packages[:len(group)-1] 
+            return group
+        endif
+    endfor
+endfunction
+
+" Given a list of import groups, the import to add, and the statement for 
+" the Java statement for the import to add, adds the import to the appropriate
+" group. If the group doesn't exist, adds the import in the appropriate 
+" position.
+function! AddNewImport(import_groups, chosen_import, import_statement)
+    " TODO: Pull this out into a user-settable global variable.
+    let group_ordering = {"com.flurry", "com.yahoo", "com", "org", "net", "io", "java", "javax"}
+    let group_ordering = map(group_ordering, 'split(v:val, ".")')
+    let packages = split(a:chosen_import, '\.')
+    let new_import_group = ExtractGroup(group_ordering, packages)
+    let added = 0
+    for group in a:import_groups
+        if len(group) > 0
+            " Each statement begins with import, so we need to strip that off,
+            " as well as the class names.
+            let group_packages = split(split(group[0]), '.')[:-2]
+            let group_type = ExtractGroup(group_ordering, group_packages)
+            if group_type == new_import_group
+                call sort(add(group, a:import_statement))
+                let added = 1
+                break
+            endif
+        endif
+    endfor
+    if !added
+        call AddNewGroup(a:import_groups, a:import_statement, new_import_group, group_ordering)
+    endif
+endfunction
+
+function! AddNewGroup(import_groups, import_statement, new_import_index, group_ordering)
+    let new_group_index = index(a:group_ordering, new_import_index)
+    let added = 0
+    for group in a:import_groups 
+        let group_packages = split(split(group[0]), '.')[:-2]
+        let group_type = ExtractGroup(a:group_ordering, group_packages)
+        if index(a:group_ordering, group_type) > new_group_index
+            let import_index = index(a:import_groups, group)
+            call insert(a:import_groups, [import_statement], import_index)
+            added = 1
+            break
+        endif
+    endfor 
+    if !added 
+        append(a:import_groups, [import_statement])
+    endif
 endfunction
 
 " Given a tagidentifier, asks the user which class they would like to import,
