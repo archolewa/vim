@@ -8,7 +8,7 @@
 " every vim tag function that does the same thing, except it filters the tag
 " list down to only those identifiers the current file can actually see.
 "
-" The third is an omni-complete function! that uses tag completion, but then
+" The third is an omni-complete function that uses tag completion, but then
 " narrows those tags down based on scope.
 "
 " The fundamental idea combining all this functionality is scope-aware
@@ -134,7 +134,7 @@ function! Translate_directory(filename)
     " Hard coded right now, but this should really be a configuration parameter.
     " Once we make this a configuration parameter, we'll need to copy the 
     " parameter before we do anything with it.
-    let package_starts = {"com":1, "org":1, "net":1, "java":1, "javax":1, "yjava":1, "io":1}
+    let package_starts = {"com":1, "org":1, "net":1, "java":1, "javax":1, "yjava":1, "io":1, "lombok":1}
     let no_extension = fnamemodify(a:filename, ":p:r")
     let classname = fnamemodify(no_extension, ":t")
     let components = reverse(split(fnamemodify(no_extension, ":h"), "/"))
