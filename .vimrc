@@ -312,6 +312,8 @@ set diffopt=filler,vertical
 " the tags asynchronously, because tag generation is slow otherwise.
 let g:easytags_auto_highlight= 0
 let g:easytags_async=1
+let g:easytags_file = '~/tags'
+let g:easytags_dynamic_files = 1
 
 " Opens the file under the cursor in an already existing buffer.
 nnoremap <Leader>gf :let mycurf=expand("<cfile>")<CR><C-w>w:execute("e ".mycurf)<CR>
