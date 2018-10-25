@@ -41,7 +41,7 @@ function! Import(tagidentifier)
         let imports_end = class_start
     endif
     let import_groups = GetImportGroups(imports_end)
-    call addNewImport(import_groups, chosen_import, import_statement)
+    call AddNewImport(import_groups, chosen_import, import_statement)
     let import_statements = []
     for group in import_groups
         for import in group
@@ -63,10 +63,11 @@ endfunction
 " Returns the group that packages is a member of
 function! ExtractGroup(import_groups, packages)
     for group in a:import_groups
-        if group == packages[:len(group)-1] 
+        if group == a:packages[:len(group)-1] 
             return group
         endif
     endfor
+    echo("ERROR: Unknown group " . packages[0])
 endfunction
 
 " Given a list of import groups, the import to add, and the statement for 
@@ -75,8 +76,8 @@ endfunction
 " position.
 function! AddNewImport(import_groups, chosen_import, import_statement)
     " TODO: Pull this out into a user-settable global variable.
-    let group_ordering = {"com.flurry", "com.yahoo", "com", "org", "net", "io", "java", "javax"}
-    let group_ordering = map(group_ordering, 'split(v:val, ".")')
+    let group_ordering = ["com.flurry", "com.yahoo", "com", "org", "net", "io", "lombok", "java", "javax"]
+    let group_ordering = map(group_ordering, 'split(v:val, "\\.")')
     let packages = split(a:chosen_import, '\.')
     let new_import_group = ExtractGroup(group_ordering, packages)
     let added = 0
@@ -84,7 +85,7 @@ function! AddNewImport(import_groups, chosen_import, import_statement)
         if len(group) > 0
             " Each statement begins with import, so we need to strip that off,
             " as well as the class names.
-            let group_packages = split(split(group[0]), '.')[:-2]
+            let group_packages = GetPackages(group)
             let group_type = ExtractGroup(group_ordering, group_packages)
             if group_type == new_import_group
                 call sort(add(group, a:import_statement))
@@ -98,21 +99,27 @@ function! AddNewImport(import_groups, chosen_import, import_statement)
     endif
 endfunction
 
+function! GetPackages(import_statements)
+    return split(split(a:import_statements[0])[1], '\.')[:-2]
+endfunction
+
 function! AddNewGroup(import_groups, import_statement, new_import_index, group_ordering)
-    let new_group_index = index(a:group_ordering, new_import_index)
+    let new_group_index = index(a:group_ordering, a:new_import_index)
     let added = 0
     for group in a:import_groups 
-        let group_packages = split(split(group[0]), '.')[:-2]
-        let group_type = ExtractGroup(a:group_ordering, group_packages)
-        if index(a:group_ordering, group_type) > new_group_index
-            let import_index = index(a:import_groups, group)
-            call insert(a:import_groups, [import_statement], import_index)
-            added = 1
-            break
+        if len(group) 
+            let group_packages = GetPackages(group)
+            let group_type = ExtractGroup(a:group_ordering, group_packages)
+            if index(a:group_ordering, group_type) > new_group_index
+                let import_index = index(a:import_groups, group)
+                call insert(a:import_groups, [a:import_statement], import_index)
+                let added = 1
+                break
+            endif
         endif
     endfor 
     if !added 
-        append(a:import_groups, [import_statement])
+        call add(a:import_groups, [a:import_statement])
     endif
 endfunction
 
@@ -122,7 +129,7 @@ function! SelectImport(tagidentifier)
     let tags = taglist('^' . a:tagidentifier . '$')
     let tags = uniq(filter(tags, 'index(["c", "i", "e"], v:val["kind"]) > -1'))
     let filenames = map(tags, 'v:val["filename"]')
-    let imports = uniq(sort(map(filenames, 'Translate_directory(v:val)')))
+    let imports = uniq(sort(filter(map(filenames, 'Translate_directory(v:val)'), 'len(v:val)')))
     if len(imports) == 1
         return imports[0]
     else
@@ -165,7 +172,11 @@ function! Translate_directory(filename)
     let classname = fnamemodify(no_extension, ":t")
     let original_qf = getqflist()
     execute "1vimgrep /^package/j " . a:filename
-    let package = split(getqflist()[0].text)[1][:-2]
+    let results = getqflist()
+    if len(results) == 0
+        return ""
+    endif
+    let package = split(results[0].text)[1][:-2]
     call setqflist(original_qf)
     return package . "." . classname
 endfunction
