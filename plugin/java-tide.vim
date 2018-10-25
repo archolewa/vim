@@ -132,10 +132,19 @@ endfunction
 " returns A string containing the fully qualified Java class name to import.
 function! Translate_directory(filename)
     " Hard coded right now, but this should really be a configuration parameter.
+    " Once we make this a configuration parameter, we'll need to copy the 
+    " parameter before we do anything with it.
     let package_starts = {"com":1, "org":1, "net":1, "java":1, "javax":1, "yjava":1, "io":1}
     let no_extension = fnamemodify(a:filename, ":p:r")
     let classname = fnamemodify(no_extension, ":t")
     let components = reverse(split(fnamemodify(no_extension, ":h"), "/"))
+    " A horrible hack, because the Java standard library has a java.io 
+    " and java.net package. This modifies package_starts, so we'll need to make 
+    " a copy once we make this a config parameter.
+    if index(components, "java-standard-library") > -1 || index(components, "openjdk8") > -1
+        call remove(package_starts, "net")
+        call remove(package_starts, "io")
+    endif 
     let package_components = []
     for component in components
         call add(package_components, component)
