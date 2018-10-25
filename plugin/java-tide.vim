@@ -26,6 +26,7 @@ function! Import(tagidentifier)
         return
     endif
     let import_statement = "import " . chosen_import . ";"
+    let original_search = @/
     if search(import_statement, 'wn')
         echo("\rImport " . chosen_import . " already exists.")
         return
@@ -68,6 +69,7 @@ function! Import(tagidentifier)
     let package_location = search("^package", 'wn')
     call deletebufline("%", package_location+1, imports_end-1)
     call append(package_location, import_statements)
+    let @/ = original_search
 endfunction
 
 " TODO: Enhance this function so that we add the new group in the correct
@@ -118,40 +120,14 @@ endfunction
 " identifiers that start a package to something truthy (i.e. a set), and
 " returns the fully-qualified Java name of the class.
 "
-" We trim the filename down to just the part of the directory that begins with
-" one of the package_start strings , and replaces all slashes with periods. Note
-" that we search starting from the tail of the filename.
-" For example, when searching the filename "java/lang/String.java", we start
-" searching from 'String.java'. This allows customers to put their packages
-" arbitrarily deeply nested under who knows what without unexpected behavior
-" if one of the intermediary directories just so happens to be "java" or
-" something.
-"
 " filename: The name of the file to translate into a fully-qualified name
-"
 " returns A string containing the fully qualified Java class name to import.
 function! Translate_directory(filename)
-    " Hard coded right now, but this should really be a configuration parameter.
-    " Once we make this a configuration parameter, we'll need to copy the 
-    " parameter before we do anything with it.
-    let package_starts = {"com":1, "org":1, "net":1, "java":1, "javax":1, "yjava":1, "io":1, "lombok":1}
     let no_extension = fnamemodify(a:filename, ":p:r")
     let classname = fnamemodify(no_extension, ":t")
-    let components = reverse(split(fnamemodify(no_extension, ":h"), "/"))
-    " A horrible hack, because the Java standard library has a java.io 
-    " and java.net package. This modifies package_starts, so we'll need to make 
-    " a copy once we make this a config parameter.
-    if index(components, "java-standard-library") > -1 || index(components, "openjdk8") > -1
-        call remove(package_starts, "net")
-        call remove(package_starts, "io")
-    endif 
-    let package_components = []
-    for component in components
-        call add(package_components, component)
-        if get(package_starts, component, 0)
-            break
-        endif
-    endfor
-    let package_components = reverse(package_components) + [classname]
-    return join(package_components, ".")
+    let original_qf = getqflist()
+    execute "1vimgrep /^package/j " . a:filename
+    let package = split(getqflist()[0].text)[1][:-2]
+    call setqflist(original_qf)
+    return package . "." . classname
 endfunction
