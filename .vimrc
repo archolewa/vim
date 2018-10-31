@@ -97,6 +97,7 @@ set nolist
 " (so far as I know) a way to jump directly to a match. If you need to cycle
 " through them anyway, might as well cycle through them.
 set completeopt=
+set complete=.,w,b
 
 function! ToggleStatusLine()
     if (&laststatus == 2)
@@ -109,7 +110,7 @@ endfunction
 " By default we don't display the status line, but we can turn it on and off
 " if we need it (say to see the git branch/filename or current line number)
 set laststatus=0
-nnoremap <Leader>st :call ToggleStatusLine()<CR>
+command! ToggleStatusLine :call ToggleStatusLine()<CR>
 
 set statusline=%{fugitive#statusline()};
 set statusline+=%f:%l:%c;
@@ -133,7 +134,7 @@ nnoremap <Leader>w :ArgWrap<CR>
 " Search, but don't jump to the first result.
 nnoremap <Leader>s :Ack!<Space>
 " Search in current file.
-nnoremap <Leader>sf :Ack! <C-r>%<C-f><Esc>F<Space>a
+nnoremap <Leader>sf :vimgrep <C-r>%<C-f><Esc>F<Space>a
 " Search for character under the cursor
 nnoremap <Leader>sc :Ack! <C-r><C-w><CR>
 " Search in particular file types
@@ -191,9 +192,6 @@ nnoremap gt :filter ## ls<c-f>BB
 " that buffer. I hardly ever use f or t, so I'm not losing much here.
 nnoremap , <C-^>
 
-" This will build the project and drop any compilation errors into the quickfix
-" window.
-nnoremap <Leader>m :make<CR><copen><CR>
 " Jump to next error.
 nnoremap <Leader>n :cnext<CR>
 
@@ -204,10 +202,6 @@ nnoremap <Leader>yy :let @" = expand("%")
 " clipboard. This is useful for running my java-debug.sh script to start a
 " debugging session with this specification.
 nnoremap <Leader>yf :let @+ = expand("%:t:r")<CR>
-
-" ------------ Gulp Commands ---------
-nnoremap <Leader>gt :Dispatch gulp unit -f %<CR>:copen<CR>
-nnoremap <Leader>gg :Dispatch gulp unit<CR>:copen<CR>
 
 " ------ Line diffs ------
 "
@@ -351,20 +345,11 @@ imap 6<Tab> <Tab>5<Tab>
 imap 7<Tab> <Tab>6<Tab>
 imap 8<Tab> <Tab>7<Tab>
 imap 9<Tab> <Tab>8<Tab>
+
 " Indent to the same level as the previous line with text. There isn't any
 " mnemonic for this, because it's optimized for typing speed and ease, since
 " I'll be doing it often. Because I don't want the computer indenting for me.
-  imap jk <Esc>?^\s*\S<CR>y^<c-o>Pa
-" imap jk <Esc>k0y^jPa
-
-" Allows me to jump to the start/end of a method definition in a class, since
-" all methods are indented 4 spaces in the Java projects I work on.
-au FileType java nnoremap [[ ?^    \S*}<CR>
-au FileType java nnoremap ]] /^    \S*}<CR>
-au FileType java vnoremap [[ ?^    \S*}<CR>
-au FileType java vnoremap ]] /^    \S*}<CR>
-au FileType java onoremap [[ ?^    \S*}<CR>
-au FileType java onoremap ]] /^    \S*}<CR>
+  imap jk <Esc>:let @a=@/<CR>?^\s*\S<CR>y^<c-o>P:let @/=@a<CR>a
 
 " Delete the current line, then paste it below the one we're on now.
 nnoremap - ddp
@@ -374,21 +359,10 @@ nnoremap _ ddkP
 inoremap <c-u> <Esc>viwUi
 nnoremap <c-u> viwU<Esc>
 
-" Abbreviations
-iabbrev teh the
-
 " Automatically replace double dashes with a single longer dash in prose.
 augroup dash
     autocmd!
     au FileType yaml iabbrev -- &mdash
-augroup END
-
-" Automatically save when modifying text. I don't run anything expensive on
-" write anymore (like Syntastic), so this won't inhibit me.
-augroup auto_save
-    autocmd!
-    au InsertLeave *.* :w
-    au TextChanged *.*  :w
 augroup END
 
 augroup java_include
@@ -409,24 +383,26 @@ augroup END
 augroup java_make
     autocmd!
     " Just use make. Without any of these fancy neomake plugins or what-not.
-    au FileType java set makeprg=mvn\ compile\ -q\ -f\ pom.xml
+    au FileType java set makeprg=mvn\ compile\ -q\ -Dcheckstyle.skip=true\ -f\ pom.xml
     " We want to print both errors and warnings.
-    au FileType java set errorformat=[ERROR]\ %f:[%l\\,%v]\ %m,[ERROR]\ %f[%l:%v]\ %m,[ERROR]\%f[%l]\ %m,[WARNING]\ %f:[%l\\,%v]\ %m,[WARN]\ %f:[%l\\,%v]\ %m,%f:%l:%v:\ %m
+    au FileType java set errorformat=[ERROR]\ %f:[%l\\,%v]\ %m,[ERROR]\ %f[%l:%v]\ %m,[ERROR]\%f[%l]\ %m,[WARNING]\ %f:[%l\\,%v]\ %m,[WARN]\ %f:[%l\\,%v]\ %m,%f:%l:%v:\ %m,%f:%l:%v:\ warning:\ %m.
     " ------------- Maven commands -----------
     au FileType java nnoremap <Leader>mc :! mvn clean<CR>
     " Test globally
-    au FileType java nnoremap <Leader>mg :set makeprg=mvn\ -q\ test\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -q\ -f\ pom.xml<CR>:copen<CR>
-    au FileType java nnoremap <Leader>mcg :! mvn clean test<CR>
+    au FileType java nnoremap <Leader>mg :set makeprg=mvn\ -q\ test\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -Dcheckstyle.skip=true\ -q\ -f\ pom.xml<CR>:copen<CR>
     " Test this file
-    au FileType java nnoremap <Leader>mt :set makeprg=mvn\ test\ -q\ -Dcheckstyle.skip=true\ -Dtest=%:t:r\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -q\ -f\ pom.xml<CR>:copen<CR>
+    au FileType java nnoremap <Leader>mt :set makeprg=mvn\ test\ -q\ -Dcheckstyle.skip=true\ -Dtest=%:t:r\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -Dcheckstyle.skip=true\ -q\ -f\ pom.xml<CR>:copen<CR>
+    " Compile this project with checkstyle.
+    au FileType java nnoremap <Leader>ms :set makeprg=mvn\ compile\ -q\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -Dcheckstyle.skip=true\ -q\ -f\ pom.xml<CR>
+    command! Classname :let @@ = Translate_directory(@%)
 augroup END
 
 augroup java_search
     autocmd!
     " Find classes that implement this interface.
-    au FileType java nnoremap <Leader>bi :Ack! --java "implements .*<C-R><C-W>"<CR>
+    au FileType java nnoremap <Leader>bi :Ack! --java "implements .*<C-R><C-W>"
     " Find classes that extend this class (i.e. subclasses).
-    au FileType java nnoremap <Leader>bs :Ack! --java "extends .*<C-R><C-W>"<CR>
+    au FileType java nnoremap <Leader>bs :Ack! --java "extends .*<C-R><C-W>"
     " Find the class definition of the identifier under the cursor.
     au FileType java nnoremap <Leader>bc :Ack! --java "class <C-R><C-W>"<CR>
     " Jump to parent class identifier
@@ -436,6 +412,21 @@ augroup java_search
     " Jump to class declaration. The class declaration starts at the access modifier
     " that's fully indented to the left.
     au FileType java nmap <Leader>c ?^\(public\\|private\\|protected\\|class\)<CR>
+
+    " Allows me to jump to the start/end of a method definition in a class, since
+    " all methods are indented 4 spaces in the Java projects I work on.
+    au FileType java nnoremap [[ ?^    \S*}<CR>
+    au FileType java nnoremap ]] /^    \S*}<CR>
+    au FileType java vnoremap [[ ?^    \S*}<CR>
+    au FileType java vnoremap ]] /^    \S*}<CR>
+    au FileType java onoremap [[ ?^    \S*}<CR>
+    au FileType java onoremap ]] /^    \S*}<CR>
+augroup END
+
+augroup lua_make
+    autocmd!
+    au FileType lua setmakeprg=lua\ %
+    au FileType lua seterrorformat=lua:\ %f:%l:\ %m
 augroup END
 
 
@@ -464,4 +455,4 @@ endfunction
 
 " Ask the user for which class to import, and appends the import to the import
 " list. The next step is to put it in the correct spot alphabetically.
-nnoremap <Leader>ai :call Import("<C-r><C-w>")<CR>
+nnoremap <Leader>ai :TideImport <C-R><C-W><CR>
