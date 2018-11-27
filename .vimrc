@@ -306,12 +306,6 @@ au ColorScheme * hi ErrorMsg NONE
 au GuiEnter * hi Error NONE
 au GuiEnter * hi ErrorMsg NONE
 
-" Toggle on undo tree.
-" This provides a nice visualization of vim's undo tree, and easy navigation
-" of it, complete with diffs!
-" I don't use it often, but when I do, it's *very* useful.
-nnoremap <Leader>u :MundoToggle<CR>
-
 " Toggle numbers. Mostly for working with others.
 nnoremap <Space>n :set invnu<CR>
 
