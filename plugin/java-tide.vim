@@ -1,10 +1,10 @@
-" The start of a plugin for tag-based development. There are three features
+" The start of a plugin for tag-based java development. There are three features
 " here.
-"
+
 " The first does imports from tags, inspired by
 " js-file-import: https://github.com/kristijanhusak/vim-js-file-import
 "
-" The second is smarter tag matching. The idea is to provide tide-versions of
+" The second is smarter tag searching. The idea is to provide tide-versions of
 " every vim tag function that does the same thing, except it filters the tag
 " list down to only those identifiers the current file can actually see.
 "
@@ -16,7 +16,7 @@
 " and omnicompletion takes advantage of scope awareness to keep the list of
 " matching tags small.
 
-
+"---------------------------- Tag Based Import ---------------------------------
 " Takes an identifier, and pulls out all the matching class tags. Then, asks the
 " user which one they'd like to import. It converts the directory to a package
 " and adds the import to the import section to the appropriate group.
@@ -31,16 +31,7 @@ function! Import(tagidentifier)
         echo("\rImport " . chosen_import . " already exists.")
         return
     endif
-    let cursor_position = getcurpos()
-    let class_start = search('^\(public\|protected\|private\) \(class\|enum\|interface\)', 'w')
-    let class_docs_start = search('/\*\*', 'bWn')
-    call setpos('.', cursor_position)
-    if class_docs_start > 0 
-        let imports_end = class_docs_start
-    else
-        let imports_end = class_start
-    endif
-    let import_groups = GetImportGroups(imports_end)
+    let [import_groups, imports_end] = GetImportGroups()
     call AddNewImport(import_groups, chosen_import, import_statement)
     let import_statements = []
     for group in import_groups
@@ -55,7 +46,7 @@ function! Import(tagidentifier)
     let @/ = original_search
 endfunction
 
-" Takes a list of lists, and a list of strings. Each entry in import_groups 
+" Takes a list of lists, and a list of strings. Each entry in import_groups
 " represents an import group. Each entry is a list of the packages that make
 " up that group. For example, {"java", "net"} represents a group of packages
 " that lead with "java.net." The list of strings is a list of packages whose
@@ -63,16 +54,16 @@ endfunction
 " Returns the group that packages is a member of
 function! ExtractGroup(import_groups, packages)
     for group in a:import_groups
-        if group == a:packages[:len(group)-1] 
+        if group == a:packages[:len(group)-1]
             return group
         endif
     endfor
-    echo("ERROR: Unknown group " . packages[0])
+    echo("ERROR: Unknown group " . string(a:packages))
 endfunction
 
-" Given a list of import groups, the import to add, and the statement for 
+" Given a list of import groups, the import to add, and the statement for
 " the Java statement for the import to add, adds the import to the appropriate
-" group. If the group doesn't exist, adds the import in the appropriate 
+" group. If the group doesn't exist, adds the import in the appropriate
 " position.
 function! AddNewImport(import_groups, chosen_import, import_statement)
     " TODO: Pull this out into a user-settable global variable.
@@ -100,14 +91,14 @@ function! AddNewImport(import_groups, chosen_import, import_statement)
 endfunction
 
 function! GetPackages(import_statements)
-    return split(split(a:import_statements[0])[1], '\.')[:-2]
+    return split(split(a:import_statements[0])[-1], '\.')[:-2]
 endfunction
 
 function! AddNewGroup(import_groups, import_statement, new_import_index, group_ordering)
     let new_group_index = index(a:group_ordering, a:new_import_index)
     let added = 0
-    for group in a:import_groups 
-        if len(group) 
+    for group in a:import_groups
+        if len(group)
             let group_packages = GetPackages(group)
             let group_type = ExtractGroup(a:group_ordering, group_packages)
             if index(a:group_ordering, group_type) > new_group_index
@@ -117,8 +108,8 @@ function! AddNewGroup(import_groups, import_statement, new_import_index, group_o
                 break
             endif
         endif
-    endfor 
-    if !added 
+    endfor
+    if !added
         call add(a:import_groups, [a:import_statement])
     endif
 endfunction
@@ -127,9 +118,10 @@ endfunction
 " and returns the fully qualified class name of the selection.
 function! SelectImport(tagidentifier)
     let tags = taglist('^' . a:tagidentifier . '$')
-    let tags = uniq(filter(tags, 'index(["c", "i", "e"], v:val["kind"]) > -1'))
+    let tags = uniq(filter(tags, 'index(["c", "i", "e", "g"], v:val["kind"]) > -1'))
     let filenames = map(tags, 'v:val["filename"]')
     let imports = uniq(sort(filter(map(filenames, 'Translate_directory(v:val)'), 'len(v:val)')))
+    " let imports = uniq(sort(filter(map(filenames, 'Translate_directory(v:val)'), 'len(v:val)')))
     if len(imports) == 1
         return imports[0]
     else
@@ -144,10 +136,28 @@ function! SelectImport(tagidentifier)
     endif
 endfunction
 
-" Returns a list of lists. Each list is a group of imports (i.e. a paragraph)
-" pulled from the buffer.
-function! GetImportGroups(imports_end)
-    let imports = filter(copy(getline(1, a:imports_end-1)), 'v:val =~ "^import" || v:val =~ "^$"')
+" Returns all the imports in the current buffer as a list of lists. Each list
+" is a group of imports (i.e. a paragraph) pulled from the buffer.
+" Returns a list containing two values: the group of imports in this buffer,
+" and the line at which the imports end.
+function! GetImportGroups()
+    let cursor_position = getcurpos()
+    let class_start = search('^\(public\|protected\|private\) \(class\|enum\|interface\)', 'w')
+    let class_docs_start = search('/\*\*', 'bWn')
+    if class_docs_start > 0
+        let imports_end = class_docs_start
+    else
+        normal gg
+        let annotation_start = search('^@', 'Wn')
+        if annotation_start > 0 && annotation_start < class_start
+            let imports_end = annotation_start
+        else
+            let imports_end = class_start
+        endif
+    endif
+    call setpos('.', cursor_position)
+
+    let imports = filter(copy(getline(1, imports_end-1)), 'v:val =~ "^import" || v:val =~ "^$"')
     let importgroups = []
     let currentgroup = []
     for line in imports
@@ -158,7 +168,7 @@ function! GetImportGroups(imports_end)
             call add(currentgroup, line)
         endif
     endfor
-    return importgroups
+    return [importgroups, imports_end]
 endfunction
 
 " Takes a filename (as a string), and a dictionary mapping
@@ -170,13 +180,22 @@ endfunction
 function! Translate_directory(filename)
     let no_extension = fnamemodify(a:filename, ":p:r")
     let classname = fnamemodify(no_extension, ":t")
+    let package = GetClassPackage(a:filename)
+    return package . "." . classname
+endfunction
+
+" Given a filename, returns the package for the Java class in said file.
+function! GetClassPackage(filename)
     let original_qf = getqflist()
-    execute "1vimgrep /^package/j " . a:filename
+    execute "silent! 1vimgrep /^package/j " . a:filename
     let results = getqflist()
     if len(results) == 0
         return ""
     endif
     let package = split(results[0].text)[1][:-2]
     call setqflist(original_qf)
-    return package . "." . classname
+    return package
 endfunction
+
+command! -nargs=1 TideImport call Import("<args>")
+command! -nargs=1 TideClassName call Translate_directory("<args>")

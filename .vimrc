@@ -4,13 +4,14 @@ au BufNewFile,BufRead *.sedl, set filetype=yaml
 au BufNewFile,BufRead *.hs, set filetype=haskell
 au BufNewFile,BufRead *.yaml, set filetype=yaml
 au BufNewFile,BufRead *.tex, set filetype=tex
-au BufNewFile,BufRead *.txt, set filetype=txt
+au BufNewFile,BufRead *.txt, set filetype=markdown
 au BufNewFile,BufRead *.md, set filetype=markdown
 au BufNewFile,BufRead *.feature, set filetype=feature
 au BufNewFile,BufRead *.js, set filetype=javascript
 au BufNewFile,BufRead *.json, set filetype=javascript
 au BufNewFile,BufRead *.java, set filetype=java
 au BufRead,BufNewFile *.ebnf set filetype=ebnf
+au BufRead,BufNewFile *.avdl set filetype=avdl
 
 " Disable netrw.
 let loaded_netrwPlugin = 1
@@ -60,8 +61,6 @@ set hidden
 " to invoke nohlsearch after each such binding, or pollute my screen with
 " unnecessary highlights.
 set nohlsearch
-" Sometimes, I want ot turn highlighting on temporarily.
-nnoremap <Leader>h :set hlsearch<CR>
 " The computer is not allowed to do things for me.
 set nowrap
 set ruler
@@ -73,17 +72,13 @@ autocmd FileType javascript setlocal tabstop=2
 autocmd FileType javascript setlocal shiftwidth=2
 set shiftround
 set nofoldenable
-set colorcolumn=80
 colorscheme desert
-autocmd FileType java setlocal colorcolumn=120
-autocmd FileType groovy setlocal colorcolumn=120
-autocmd FileType javascript setlocal colorcolumn=120
 highlight ColorColumn ctermbg=8
 
 " Run a case insensitive search. By default, run case sensitive searches
 nnoremap <Leader>/ //c
 set foldmethod=indent
-set path=.,/usr/include,,**
+set path=.,**
 set incsearch
 set tags=./tags;$HOME
 set splitright
@@ -153,6 +148,7 @@ if filereadable("cscope.out")
 elseif $CSCOPE_DBS != ""
     cs add $CSCOPE_DBS
 endif
+set cscoperelative
 
 " Putting cscope results in quickfix, which is much friendlier than whatever
 " it uses by default.
@@ -161,8 +157,9 @@ set cscopequickfix=s-,c-,d-,i-,t-,e-,a-,g-
 " At the end of each of these mappings we jump back to the previous jump,
 " because cscope insists on jumping to the first match, and I don't want that.
 
-" Find all uses of a symbol
-nnoremap <Leader>bu :cs find s <C-R>=expand("<cword>")<CR><CR>:copen<CR><c-w>k<c-o>
+" Find all uses of a symbol. Yeah, I know the shortcut doesn't make any sense. It's
+" a holdover from my IntelliJ days.
+nnoremap <Leader>b :cs find s <C-R>=expand("<cword>")<CR><CR>:copen<CR>
 
 " Open the location list with all identifiers that match the tag under the
 " cursor, without jumping to any of them.
@@ -194,6 +191,7 @@ nnoremap , <C-^>
 
 " Jump to next error.
 nnoremap <Leader>n :cnext<CR>
+nnoremap <Leader>p :cprevious<CR>
 
 " Copy the name of the current file into the system clipboard for use in other
 " programs.
@@ -299,22 +297,8 @@ nnoremap <Space>o :only<CR>
 " Show filler lines to keep files synchronized, and open diff split vertically.
 set diffopt=filler,vertical
 
-" ---- Easytags settings
-" Easytags is convenient, because it auto generates tags for me, and I rely
-" *heavily* on tags.
-" We don't bother highlighting tags. Easytags also computes
-" the tags asynchronously, because tag generation is slow otherwise.
-let g:easytags_auto_highlight= 0
-let g:easytags_async=1
-let g:easytags_file = '~/tags'
-let g:easytags_dynamic_files = 1
-
 " Opens the file under the cursor in an already existing buffer.
 nnoremap <Leader>gf :let mycurf=expand("<cfile>")<CR><C-w>w:execute("e ".mycurf)<CR>
-
-" Use the unix utility 'par' to handle paragraph formatting rather than Vim's
-" built in utility.
-"set formatprg=par
 
 " Colors! My nemesis!
 au ColorScheme * hi Error NONE
@@ -335,21 +319,10 @@ nnoremap <Space>n :set invnu<CR>
 " etc.
 let b:match_words='\[:\],<:>,\(:\),{:}'
 
-" Faster tabbing over without having to go into and out of normal mode
-inoremap <S-Tab> <Tab><Tab>
-inoremap 2<Tab> <Tab><Tab>
-imap 3<Tab> <Tab>2<Tab>
-imap 4<Tab> <Tab>3<Tab>
-imap 5<Tab> <Tab>4<Tab>
-imap 6<Tab> <Tab>5<Tab>
-imap 7<Tab> <Tab>6<Tab>
-imap 8<Tab> <Tab>7<Tab>
-imap 9<Tab> <Tab>8<Tab>
-
 " Indent to the same level as the previous line with text. There isn't any
 " mnemonic for this, because it's optimized for typing speed and ease, since
 " I'll be doing it often. Because I don't want the computer indenting for me.
-  imap jk <Esc>:let @a=@/<CR>?^\s*\S<CR>y^<c-o>P:let @/=@a<CR>a
+imap jk <Esc>:let x=@/<CR>?^\s*\S<CR>y^<c-o>P:let @/=x<CR>a
 
 " Delete the current line, then paste it below the one we're on now.
 nnoremap - ddp
@@ -365,21 +338,39 @@ augroup dash
     au FileType yaml iabbrev -- &mdash
 augroup END
 
+" -------- Formatting -------- 
+set nocindent
+" Lets me find lines that are too long, without having to rely on colorcolumn.
+command! LongLines /.\{80\}
+
+" ----- Java ----- 
+augroup java_format
+    autocmd!
+    command! LongLines /.\{120\}
+augroup END
+
+" Contains customizations of make for various language and coding conventsions.
+
 augroup java_include
     autocmd!
     au FileType java set include=^import\ \\zs.\\{-\\}\\ze;
+    au FileType java set path-=/usr/include
     " Enable gf on import statements.  Convert . in the package
     " name to / and append .java to the name, then search the path.
-    " Also allows using [i, but that's *way* too slow. Better off to write
-    " a simple vim function that pulls out the list of tags, and then filters
-    " using the below expression to convert imports to file paths.
+    " Also allows using [i, but that's *way* too slow. 
     au FileType java set includeexpr=substitute(v:fname,'\\.','/','g')
     au FileType java set suffixesadd=.java
-    au FileType java set path+=~/sources/*/src/main/java
+    au FileType java set path+=~/sources/java-standard-library/**
+    au FileType java set path+=~/gozer/flurry/purplebox-ws-public-v1/**
     au FileType java set path+=~/fili/fili-core/src/main/java
-    au FileType java set path+=src/main/java
+    au FileType java set path+=~/gozer/flurry/railsplitter-ws/**
+    au FileType java set path+=~/gozer/flurry/zuul-ws/**
+    au FileType java set path+=~/sources/com/**
+    au FileType java set path+=~/sources/org/**
+    au FileType java set path+=~/sources/net/**
 augroup END
 
+" Make for java. This assumes we are using maven.
 augroup java_make
     autocmd!
     " Just use make. Without any of these fancy neomake plugins or what-not.
@@ -389,46 +380,105 @@ augroup java_make
     " ------------- Maven commands -----------
     au FileType java nnoremap <Leader>mc :! mvn clean<CR>
     " Test globally
-    au FileType java nnoremap <Leader>mg :set makeprg=mvn\ -q\ test\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -Dcheckstyle.skip=true\ -q\ -f\ pom.xml<CR>:copen<CR>
+    au FileType java nnoremap <Leader>mg :set makeprg=mvn\ -q\ test\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -Dcheckstyle.skip=true\ -q\ -f\ pom.xml<CR>
     " Test this file
-    au FileType java nnoremap <Leader>mt :set makeprg=mvn\ test\ -q\ -Dcheckstyle.skip=true\ -Dtest=%:t:r\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -Dcheckstyle.skip=true\ -q\ -f\ pom.xml<CR>:copen<CR>
+    au FileType java nnoremap <Leader>mt :set makeprg=mvn\ test\ -q\ -Dcheckstyle.skip=true\ -Dtest=%:t:r\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -Dcheckstyle.skip=true\ -q\ -f\ pom.xml<CR>
     " Compile this project with checkstyle.
     au FileType java nnoremap <Leader>ms :set makeprg=mvn\ compile\ -q\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -Dcheckstyle.skip=true\ -q\ -f\ pom.xml<CR>
     command! Classname :let @@ = Translate_directory(@%)
 augroup END
 
-augroup java_search
-    autocmd!
-    " Find classes that implement this interface.
-    au FileType java nnoremap <Leader>bi :Ack! --java "implements .*<C-R><C-W>"
-    " Find classes that extend this class (i.e. subclasses).
-    au FileType java nnoremap <Leader>bs :Ack! --java "extends .*<C-R><C-W>"
-    " Find the class definition of the identifier under the cursor.
-    au FileType java nnoremap <Leader>bc :Ack! --java "class <C-R><C-W>"<CR>
-    " Jump to parent class identifier
-    au FileType java nnoremap <Leader>p /\<extends\> \S*<CR>w
-    " Jump to interface being implemented
-    au FileType java nmap <Leader>i /\<implements\> \S*<CR>w
-    " Jump to class declaration. The class declaration starts at the access modifier
-    " that's fully indented to the left.
-    au FileType java nmap <Leader>c ?^\(public\\|private\\|protected\\|class\)<CR>
-
-    " Allows me to jump to the start/end of a method definition in a class, since
-    " all methods are indented 4 spaces in the Java projects I work on.
-    au FileType java nnoremap [[ ?^    \S*}<CR>
-    au FileType java nnoremap ]] /^    \S*}<CR>
-    au FileType java vnoremap [[ ?^    \S*}<CR>
-    au FileType java vnoremap ]] /^    \S*}<CR>
-    au FileType java onoremap [[ ?^    \S*}<CR>
-    au FileType java onoremap ]] /^    \S*}<CR>
-augroup END
-
+" Make for Lua. This works by just executing Lua with the current file.
 augroup lua_make
     autocmd!
     au FileType lua setmakeprg=lua\ %
     au FileType lua seterrorformat=lua:\ %f:%l:\ %m
 augroup END
 
+
+" Groups for working with search. This allows for easily jumping to various
+" landmarks in a file. The landmarks vary based on language.
+augroup java_search
+    autocmd!
+    " Find classes that implement this interface.
+    command! -nargs=1 Implementors :Ack! --java "implements .*<args>"
+    " Find classes that extend this class (i.e. subclasses).
+    command! -nargs=1 Children :cd :Ack! --java "extends <args>"
+    " Find the class definition of the identifier under the cursor.
+    command! -nargs=1 ClassDef :Ack! --java "class <args>"
+    " Jump to parent or interface
+    command! ParentIdentifier execute "/\\(\\<extends\\>\\|\\<implements\\>\\) \\S*" | normal nW
+    " Jump to class declaration. The class declaration starts at the access modifier
+    " that's"^/s*public fully indented to the left.
+    command! ClassDeclaration execute "?^\\(public\\|private\\|protected\\|class\\)" | normal n2W
+
+    " Allows me to jump to the start of a method definition in a class, since
+    " all methods are indented 4 spaces in the Java projects I work on.
+    " We also don't make use of package-private.
+    au FileType java nnoremap [[ ?^    \(protected\\|private\\|public\)<CR>
+    au FileType java nnoremap ]] /^    \(protected\\|private\\|public\)<CR>
+    au FileType java vnoremap [[ ?^    \(protected\\|private\\|public\)<CR>
+    au FileType java vnoremap ]] /^    \(protected\\|private\\|public\)<CR>
+    au FileType java onoremap [[ ?^    \(protected\\|private\\|public\)<CR>
+    au FileType java onoremap ]] /^    \(protected\\|private\\|public\)<CR>
+augroup END
+
+augroup avdl_search
+    autocmd!
+    " Allows me to jump to the start of a method definition in a class, since
+    " all methods are indented 4 spaces in the Java projects I work on.
+    " We also don't make use of package-private.
+    au FileType avdl nnoremap [[ ?^  record<CR>
+    au FileType avdl nnoremap ]] /^  record<CR>
+    au FileType avdl vnoremap [[ ?^  record<CR>
+    au FileType avdl vnoremap ]] /^  record<CR>
+    au FileType avdl onoremap [[ ?^  record<CR>
+    au FileType avdl onoremap ]] /^  record<CR>
+augroup END
+
+augroup markdown_search
+    autocmd!
+    " Allows me to co-opt the `[[`, `]]` movements to jump between Markdown
+    " headings.
+    au FileType markdown nnoremap [[ ?^#<CR>
+    au FileType markdown nnoremap ]] /^#<CR>
+    au FileType markdown vnoremap [[ ?^#<CR>
+    au FileType markdown vnoremap ]] /^#<CR>
+    au FileType markdown onoremap [[ ?^#<CR>
+    au FileType markdown onoremap ]] /^#<CR>
+augroup END
+
+" Here we have various `overview` groups. These provide commands and/or
+" shortcuts for quickly getting an overview based on the format of different
+" types of documents. For example, getting an overview of all public members
+" in a java class, or all the headings in a markdown file.
+
+" A function for finding the 'outline' of a file, whatever that means.
+" We get the outline by performing a search of the specified pattern, and then
+" opening the quickfix window.
+function! Outline(pattern)
+    execute 'vimgrep ' . '"' . a:pattern . '" '. expand("%")
+    execute 'copen'
+    " Scrolls the output so that the method signatures are left justified,
+    " rather than the file location. The file location is important for 
+    " jumping, but I don't really need it when looking at the outline.
+    normal 2f|wzs
+endfunction
+augroup java_overview
+    autocmd!
+    " Display a list of public methods/members.
+    au FileType java command! Outline :call Outline("^\\s*public")
+augroup END
+
+augroup markdown_overview
+    autocmd!
+    " Outline returns all the headings in the file.
+    au FileType markdown command! Outline :call Outline("^#")
+augroup END 
+
+augroup lua_overview
+    au FileType lua command! Outline :call Outline("^\(M\|local\|function\)")
+augroup END
 
 " We have some private things we need (like the URL for corporate
 " git repos), but I don't feel comfortable putting in a public dot file.
@@ -437,22 +487,8 @@ source ~/.vim/private.vim
 " Display the current file name.
 nnoremap <space>f :echom @%<CR>
 
-nnoremap <Leader>q :call QuickFixToggle()<CR>
-
-let g:quickfix_is_open = 0
-
-function! QuickFixToggle()
-    if g:quickfix_is_open
-        cclose
-        let g:quickfix_is_open = 0
-        execute g:quickfix_return_to_window . "wincmd w"
-    else
-        let g:quickfix_return_to_window = winnr()
-        copen
-        let g:quickfix_is_open = 1
-    endif
-endfunction
-
 " Ask the user for which class to import, and appends the import to the import
 " list. The next step is to put it in the correct spot alphabetically.
 nnoremap <Leader>ai :TideImport <C-R><C-W><CR>
+
+command! -nargs=1 InsertPath r!find ~/ -name <args>
