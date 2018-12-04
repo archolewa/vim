@@ -47,6 +47,7 @@ call pathogen#helptags()
 " custom mappings, like a mapping to duplicate the previous line's indent,
 " to handle indenting. Otherwise, I find myself fighting the computer.
 filetype indent plugin off
+filetype on
 " I find syntax highlighting to be unnecessary visual stimulation. I don't
 " know that syntax highlighting really contributes much.
 syntax off
@@ -78,9 +79,9 @@ highlight ColorColumn ctermbg=8
 " Run a case insensitive search. By default, run case sensitive searches
 nnoremap <Leader>/ //c
 set foldmethod=indent
-set path=.,**
+set path=.
 set incsearch
-set tags=./tags;$HOME
+set tags=./tags;~/tags
 set splitright
 " Disable all colors
 set t_Co=0
@@ -159,7 +160,7 @@ set cscopequickfix=s-,c-,d-,i-,t-,e-,a-,g-
 
 " Find all uses of a symbol. Yeah, I know the shortcut doesn't make any sense. It's
 " a holdover from my IntelliJ days.
-nnoremap <Leader>b :cs find s <C-R>=expand("<cword>")<CR><CR>:copen<CR>
+nnoremap <Leader>b :cs find s <C-R>=expand("<cword>")<CR><CR>:copen<CR><c-w>k<c-o><c-w>j
 
 " Open the location list with all identifiers that match the tag under the
 " cursor, without jumping to any of them.
@@ -169,7 +170,7 @@ nnoremap <Leader>b :cs find s <C-R>=expand("<cword>")<CR><CR>:copen<CR>
 " prefilter out matches.
 nnoremap g] :ltag <C-R><C-W><CR>:lopen<CR><c-w>k<c-o><c-w>j
 
-" Jump
+" Jump and populate location list
 nnoremap <c-]> :ltag <C-R><C-W><cr>
 
 " ---------- Buffer management -----------
@@ -316,7 +317,7 @@ let b:match_words='\[:\],<:>,\(:\),{:}'
 " Indent to the same level as the previous line with text. There isn't any
 " mnemonic for this, because it's optimized for typing speed and ease, since
 " I'll be doing it often. Because I don't want the computer indenting for me.
-imap jk <Esc>:let x=@/<CR>?^\s*\S<CR>y^<c-o>P:let @/=x<CR>a
+imap jk <Esc>:let x=@/<CR>?^\s*\S<CR>"yy^<c-o>"yP:let @/=x<CR>a
 
 " Delete the current line, then paste it below the one we're on now.
 nnoremap - ddp
@@ -335,17 +336,25 @@ augroup END
 " -------- Formatting -------- 
 set nocindent
 " Lets me find lines that are too long, without having to rely on colorcolumn.
-command! LongLines /.\{80\}
+command! LongLines /^.\{80\}
 
 " ----- Java ----- 
+
+" Ask the user for which class to import, and appends the import to the import
+" list. The next step is to put it in the correct spot alphabetically.
+nnoremap <Leader>ai :TideImport <C-R><C-W><CR>
+
+" Contains java specific commands that are useful for following formatting
+" rules.
 augroup java_format
     autocmd!
-    command! LongLines /.\{120\}
+    " Allows me to easily find lines that are too long without having to
+    " rely on checkstyle, or an obnoxious colored column.
+    au FileType java command! LongLines /^.\{120\}
 augroup END
 
-" Contains customizations of make for various language and coding conventsions.
-
 augroup java_include
+    set tags=tags,~/tags
     autocmd!
     au FileType java set include=^import\ \\zs.\\{-\\}\\ze;
     au FileType java set path-=/usr/include
@@ -354,41 +363,26 @@ augroup java_include
     " Also allows using [i, but that's *way* too slow. 
     au FileType java set includeexpr=substitute(v:fname,'\\.','/','g')
     au FileType java set suffixesadd=.java
-    au FileType java set path+=~/sources/java-standard-library/**
-    au FileType java set path+=~/gozer/flurry/purplebox-ws-public-v1/**
-    au FileType java set path+=~/fili/fili-core/src/main/java
-    au FileType java set path+=~/gozer/flurry/railsplitter-ws/**
-    au FileType java set path+=~/gozer/flurry/zuul-ws/**
-    au FileType java set path+=~/sources/com/**
-    au FileType java set path+=~/sources/org/**
-    au FileType java set path+=~/sources/net/**
-augroup END
-
-" Make for java. This assumes we are using maven.
-augroup java_make
-    autocmd!
-    " Just use make. Without any of these fancy neomake plugins or what-not.
-    au FileType java set makeprg=mvn\ compile\ -q\ -Dcheckstyle.skip=true\ -f\ pom.xml
-    " We want to print both errors and warnings.
-    au FileType java set errorformat=[ERROR]\ %f:[%l\\,%v]\ %m,[ERROR]\ %f[%l:%v]\ %m,[ERROR]\%f[%l]\ %m,[WARNING]\ %f:[%l\\,%v]\ %m,[WARN]\ %f:[%l\\,%v]\ %m,%f:%l:%v:\ %m,%f:%l:%v:\ warning:\ %m.
-    " ------------- Maven commands -----------
-    au FileType java nnoremap <Leader>mc :! mvn clean<CR>
-    " Test globally
-    au FileType java nnoremap <Leader>mg :set makeprg=mvn\ -q\ test\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -Dcheckstyle.skip=true\ -q\ -f\ pom.xml<CR>
-    " Test this file
-    au FileType java nnoremap <Leader>mt :set makeprg=mvn\ test\ -q\ -Dcheckstyle.skip=true\ -Dtest=%:t:r\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -Dcheckstyle.skip=true\ -q\ -f\ pom.xml<CR>
-    " Compile this project with checkstyle.
-    au FileType java nnoremap <Leader>ms :set makeprg=mvn\ compile\ -q\ -f\ pom.xml<CR>:make<CR>:set makeprg=mvn\ compile\ -Dcheckstyle.skip=true\ -q\ -f\ pom.xml<CR>
+    au FileType java set path+=~/sources/java-standard-library
+    au FileType java set path+=~/gozer/purplebox-ws-public-v1/src/main/java
+    au FileType java set path+=~/fili/fili-core/src/main/java/src/main/java
+    au FileType java set path+=~/gozer/flurry/dataLogConsumer/src
+    au FileType java set path+=~/gozer/flurry/dbAccessLayer/src
+    au FileType java set path+=~/gozer/flurry/hibernateCommon/src
+    au FileType java set path+=~/gozer/flurry/util/src
+    au FileType java set path+=~/gozer/railsplitter-ws/src/main/java
+    au FileType java set path+=~/gozer/zuul-ws/src/main/java/
+    au FileType java set path+=~/sources
     command! Classname :let @@ = Translate_directory(@%)
 augroup END
 
-" Make for Lua. This works by just executing Lua with the current file.
-augroup lua_make
+" Make for java, using javac.
+augroup java_make
     autocmd!
-    au FileType lua setmakeprg=lua\ %
-    au FileType lua seterrorformat=lua:\ %f:%l:\ %m
+    " Just use make. Without any of these fancy neomake plugins or what-not.
+    au FileType java set makeprg=javac\ -classpath\ `cat\ .raw-classpath`\ -d\ /tmp\ `find\ .\ -name\ *.java`
+    au FileType java set errorformat=%E%f:%l:\ %m,%+Z%p^
 augroup END
-
 
 " Groups for working with search. This allows for easily jumping to various
 " landmarks in a file. The landmarks vary based on language.
@@ -397,7 +391,7 @@ augroup java_search
     " Find classes that implement this interface.
     command! -nargs=1 Implementors :Ack! --java "implements .*<args>"
     " Find classes that extend this class (i.e. subclasses).
-    command! -nargs=1 Children :cd :Ack! --java "extends <args>"
+    command! -nargs=1 Children :Ack! --java "extends <args>"
     " Find the class definition of the identifier under the cursor.
     command! -nargs=1 ClassDef :Ack! --java "class <args>"
     " Jump to parent or interface
@@ -430,6 +424,34 @@ augroup avdl_search
     au FileType avdl onoremap ]] /^  record<CR>
 augroup END
 
+" A function for finding the 'outline' of a file, whatever that means.
+" We get the outline by performing a search of the specified pattern, and then
+" opening the quickfix window.
+function! Outline(pattern)
+    execute 'vimgrep ' . '"' . a:pattern . '" '. expand("%")
+    execute 'copen'
+endfunction
+
+augroup java_overview
+    autocmd!
+    " Display a list of public methods/members.
+    au FileType java command! Outline :call Outline("^\\s*public")
+augroup END
+
+
+" --- Lua ---
+" Make for Lua. This works by just executing Lua with the current file.
+augroup lua_make
+    autocmd!
+    au FileType lua setmakeprg=lua\ %
+    au FileType lua seterrorformat=lua:\ %f:%l:\ %m
+augroup END
+
+augroup lua_overview
+    au FileType lua command! Outline :call Outline("^\(M\|local\|function\)")
+augroup END
+
+" --- Markdown ---
 augroup markdown_search
     autocmd!
     " Allows me to co-opt the `[[`, `]]` movements to jump between Markdown
@@ -442,36 +464,35 @@ augroup markdown_search
     au FileType markdown onoremap ]] /^#<CR>
 augroup END
 
-" Here we have various `overview` groups. These provide commands and/or
-" shortcuts for quickly getting an overview based on the format of different
-" types of documents. For example, getting an overview of all public members
-" in a java class, or all the headings in a markdown file.
-
-" A function for finding the 'outline' of a file, whatever that means.
-" We get the outline by performing a search of the specified pattern, and then
-" opening the quickfix window.
-function! Outline(pattern)
-    execute 'vimgrep ' . '"' . a:pattern . '" '. expand("%")
-    execute 'copen'
-    " Scrolls the output so that the method signatures are left justified,
-    " rather than the file location. The file location is important for 
-    " jumping, but I don't really need it when looking at the outline.
-    normal 2f|wzs
-endfunction
-augroup java_overview
-    autocmd!
-    " Display a list of public methods/members.
-    au FileType java command! Outline :call Outline("^\\s*public")
-augroup END
-
 augroup markdown_overview
     autocmd!
     " Outline returns all the headings in the file.
     au FileType markdown command! Outline :call Outline("^#")
 augroup END 
 
-augroup lua_overview
-    au FileType lua command! Outline :call Outline("^\(M\|local\|function\)")
+" --- Quickfix ---
+" This manages autocommands for keeping the quickfix tame. 
+" I rely heavily on searching, tags, and cscope. However 
+" all of those display file names and locations. Most of the
+" time I don't care about that (though I do want Vim to know
+" about them for easy jumping), so that is just noise. 
+" This sets up my quickfix
+" to hide filenames and locations except for when I 
+" explicitly ask for them.
+augroup quickfix_file_names
+    autocmd!
+    au FileType qf set conceallevel=2
+    au FileType qf set concealcursor=n
+    au FileType qf syntax match qfFileName /^.\{-\}\s\s*/ transparent conceal
+    au FileType qf command! ConcealFile :set concealcursor=n
+    au FileType qf command! ShowFile :set concealcursor=
+    au FileType qf command! Show :set conceallevel=0
+    au FileType qf command! Hide :set conceallevel=2
+    au BufLeave quickfix set conceallevel=0
+    au BufLeave quickfix delcommand ConcealFile
+    au BufLeave quickfix delcommand ShowFile
+    au BufLeave quickfix delcommand Show
+    au BufLeave quickfix delcommand Hide
 augroup END
 
 " We have some private things we need (like the URL for corporate
@@ -480,9 +501,5 @@ source ~/.vim/private.vim
 
 " Display the current file name.
 nnoremap <space>f :echom @%<CR>
-
-" Ask the user for which class to import, and appends the import to the import
-" list. The next step is to put it in the correct spot alphabetically.
-nnoremap <Leader>ai :TideImport <C-R><C-W><CR>
 
 command! -nargs=1 InsertPath r!find ~/ -name <args>
