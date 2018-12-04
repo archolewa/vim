@@ -67,7 +67,7 @@ endfunction
 " position.
 function! AddNewImport(import_groups, chosen_import, import_statement)
     " TODO: Pull this out into a user-settable global variable.
-    let group_ordering = ["com.flurry", "com.yahoo", "com", "org", "net", "io", "lombok", "java", "javax"]
+    let group_ordering = ["com.flurry", "com.yahoo", "com", "org", "net", "edu", "io", "gnu", "lombok", "java", "javax"]
     let group_ordering = map(group_ordering, 'split(v:val, "\\.")')
     let packages = split(a:chosen_import, '\.')
     let new_import_group = ExtractGroup(group_ordering, packages)
@@ -186,16 +186,41 @@ endfunction
 
 " Given a filename, returns the package for the Java class in said file.
 function! GetClassPackage(filename)
-    let original_qf = getqflist()
-    execute "silent! 1vimgrep /^package/j " . a:filename
-    let results = getqflist()
-    if len(results) == 0
-        return ""
-    endif
-    let package = split(results[0].text)[1][:-2]
-    call setqflist(original_qf)
-    return package
+    let package = trim(system("ag --nonumbers --nofilename --silent -m 1 \"^package\" " . a:filename))
+    return split(split(package, " ")[1], ";")[0]
 endfunction
 
+" Given an identifier, returns the list of tags that can be reahed
+" from this project's classpath.
+function! FilterTags(identifier)
+    " TODO: Pull this out into a configuration variable.
+    let classpath = [getcwd(), "/Users/acholewa/sources/java-standard-library", "/Users/acholewa/gozer/flurry/metricStoreAPI/",  "/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect"]
+    let classpath = extend(classpath, split(system("cat .classpath"), "\n"))
+    let tags = taglist("^" . a:identifier . "$", @%)
+    let filteredtags = []
+    for tag in tags
+        if tag.filename ==# @%
+           let filteredtags = append(filteredtags, tag)
+        else
+            for path in classpath
+                if match(tag.filename, path) > -1
+                    let filteredtags = add(filteredtags, tag)
+                    break
+                endif
+            endfor
+        endif
+    endfor
+    return filteredtags
+endfunction
+
+function! TideJumpTag(identifier, index)
+    let tag = FilterTags(a:identifier)[a:index]
+    execute "e " . tag.filename
+    call setpos('.', [0, 1, 1, 0]) 
+    execute tag.cmd
+endfunction
+
+" TODO: Figure out how to pass a number as a prefix.
+command! -nargs=1 TideTag call TideJumpTag("<args>", 0)
 command! -nargs=1 TideImport call Import("<args>")
 command! -nargs=1 TideClassName call Translate_directory("<args>")
