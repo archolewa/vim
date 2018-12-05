@@ -6,10 +6,9 @@
 "
 " The second is smarter tag searching. The idea is to provide tide-versions of
 " every vim tag function that does the same thing, except it filters the tag
-" list down to only those identifiers the current file can actually see.
+" list down to only those identifiers in the classpath.
 "
-" The third is an omni-complete function that uses tag completion, but then
-" narrows those tags down based on scope.
+" The third is classpath-aware tag completion.
 "
 " The fundamental idea combining all this functionality is scope-aware
 " tags. Adding imports expands the scope where we can find tags. Tag jumping
@@ -117,7 +116,7 @@ endfunction
 " Given a tagidentifier, asks the user which class they would like to import,
 " and returns the fully qualified class name of the selection.
 function! SelectImport(tagidentifier)
-    let tags = taglist('^' . a:tagidentifier . '$')
+    let tags = map(FilterTags(a:tagidentifier), 'v:val.tag')
     let tags = uniq(filter(tags, 'index(["c", "i", "e", "g"], v:val["kind"]) > -1'))
     let filenames = map(tags, 'v:val["filename"]')
     let imports = uniq(sort(filter(map(filenames, 'Translate_directory(v:val)'), 'len(v:val)')))
@@ -171,16 +170,27 @@ function! GetImportGroups()
     return [importgroups, imports_end]
 endfunction
 
+
+
+let directory_cache = {}
 " Takes a filename (as a string), and a dictionary mapping
 " identifiers that start a package to something truthy (i.e. a set), and
 " returns the fully-qualified Java name of the class.
+"
+" This function maintains an (ever-growing) in-memory cache of filenames to 
+" packages to keep repeated lookups fast.
 "
 " filename: The name of the file to translate into a fully-qualified name
 " returns A string containing the fully qualified Java class name to import.
 function! Translate_directory(filename)
     let no_extension = fnamemodify(a:filename, ":p:r")
     let classname = fnamemodify(no_extension, ":t")
-    let package = GetClassPackage(a:filename)
+    if has_key(g:directory_cache, a:filename) > 0
+        let package = g:directory_cache[a:filename]
+    else
+        let package = GetClassPackage(a:filename)
+        let g:directory_cache[a:filename] = package
+    endif
     return package . "." . classname
 endfunction
 
@@ -190,37 +200,50 @@ function! GetClassPackage(filename)
     return split(split(package, " ")[1], ";")[0]
 endfunction
 
-" Given an identifier, returns the list of tags that can be reahed
-" from this project's classpath.
+" Given an identifier, returns a dictionary containing two entries:
+" 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
+" 2. taglistindex - The tag's original index in the taglist. This allows us to use
+" `taglistindex`tag to immediately jump to this tag and add it to the tagstack.
 function! FilterTags(identifier)
     " TODO: Pull this out into a configuration variable.
-    let classpath = [getcwd(), "/Users/acholewa/sources/java-standard-library", "/Users/acholewa/gozer/flurry/metricStoreAPI/",  "/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect"]
+    let classpath = [getcwd(), "/Users/acholewa/sources/java-standard-library", "/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect"]
     let classpath = extend(classpath, split(system("cat .classpath"), "\n"))
     let tags = taglist("^" . a:identifier . "$", @%)
     let filteredtags = []
+    let index = 0
     for tag in tags
         if tag.filename ==# @%
-           let filteredtags = append(filteredtags, tag)
+           let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
         else
             for path in classpath
                 if match(tag.filename, path) > -1
-                    let filteredtags = add(filteredtags, tag)
+                    let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
                     break
                 endif
             endfor
         endif
+        let index = index + 1
     endfor
     return filteredtags
 endfunction
 
-function! TideJumpTag(identifier, index)
-    let tag = FilterTags(a:identifier)[a:index]
-    execute "e " . tag.filename
-    call setpos('.', [0, 1, 1, 0]) 
-    execute tag.cmd
+function! TideJumpTag(identifier, count, bang)
+    let filteredTags = FilterTags(a:identifier)
+    let index = max([a:count, len(filteredTags) - 1])
+    let tag = filteredTags[index]
+    execute tag.taglistindex . "tag" . a:bang . " " . a:identifier 
 endfunction
 
-" TODO: Figure out how to pass a number as a prefix.
-command! -nargs=1 TideTag call TideJumpTag("<args>", 0)
-command! -nargs=1 TideImport call Import("<args>")
+function! TideTselect(identifier, bang)
+    let filteredTagsIndices = FilterTags(a:identifier)
+    let filteredTags = map(copy(filteredTagsIndices), "v:val.tag")
+    " TODO: Pull this out into a configuration parameter.
+    let todisplay = map(copy(filteredTags), 'v:key . "\t" . v:val.kind . "\t" . v:val.name . "\t" . Translate_directory(v:val.filename) . "\n\t\t" . trim(v:val.cmd[2:-3])') " Strip characters used by the search command.
+    let tagliststring = join(todisplay, "\n") . "\n"
+    let selection = input(tagliststring)
+endfunction
+
 command! -nargs=1 TideClassName call Translate_directory("<args>")
+command! -nargs=1 -complete=tag TideImport call Import("<args>")
+command! -nargs=1 -complete=tag -count -bang Tidetag call TideJumpTag("<args>", "<count>", "<bang>")
+command! -nargs=1 -complete=tag -bang Tidetselect call TideTselect("<args>", "<bang>")
