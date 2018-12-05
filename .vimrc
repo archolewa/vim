@@ -52,7 +52,6 @@ filetype on
 " know that syntax highlighting really contributes much.
 syntax off
 
-set clipboard=unnamed
 set backspace=indent,eol,start
 " Hide buffers instead of closing them. Means I don't have to save before
 " switching, and may speed things up maybe?
@@ -381,7 +380,21 @@ augroup java_make
     autocmd!
     " Just use make. Without any of these fancy neomake plugins or what-not.
     au FileType java set makeprg=javac\ -classpath\ `cat\ .raw-classpath`\ -d\ /tmp\ `find\ .\ -name\ *.java`
-    au FileType java set errorformat=%E%f:%l:\ %m,%+Z%p^
+    au FileType java set errorformat=%E%f:%l:\ %m,%-Z%p^,%+C%.%#
+augroup END
+
+" Defines a collection of commands for making common patterns in Java easier.
+augroup java_generate
+    autocmd!
+    function! GetClassname()
+        let c = @c
+        let @c = expand("%:t:r")
+        normal "cp
+        let @c = c
+    endfunction
+    command! Classname :call GetClassname()
+    command! ExtractVariable :normal 2yw"_dw0"ay^O<Esc>"app
+    nnoremap <Leader>v :ExtractVariable<CR>
 augroup END
 
 " Groups for working with search. This allows for easily jumping to various
