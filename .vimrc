@@ -169,8 +169,10 @@ nnoremap <Leader>b :cs find s <C-R>=expand("<cword>")<CR><CR>:copen<CR><c-w>k<c-
 " prefilter out matches.
 nnoremap g] :ltag <C-R><C-W><CR>:lopen<CR><c-w>k<c-o><c-w>j
 
-" Jump and populate location list
-nnoremap <c-]> :ltag <C-R><C-W><cr>
+" Let's use my new TideTag command!
+nnoremap <c-]> :Tidetag <C-R><C-W><cr>
+nnoremap <Leader>y :tnext<CR>
+nnoremap <Leader>t :tprevious<CR>
 
 " ---------- Buffer management -----------
 " Close current window, without actually closing the buffer. This gives me the
@@ -195,11 +197,7 @@ nnoremap <Leader>p :cprevious<CR>
 
 " Copy the name of the current file into the system clipboard for use in other
 " programs.
-nnoremap <Leader>yy :let @" = expand("%")
-" Copy just the part of the filename used in maven's test plugin to the
-" clipboard. This is useful for running my java-debug.sh script to start a
-" debugging session with this specification.
-nnoremap <Leader>yf :let @+ = expand("%:t:r")<CR>
+command! CopyFilename let @+ = expand("%")
 
 " ------ Line diffs ------
 "
@@ -213,7 +211,7 @@ function! TrimWhiteSpace()
     %s/\s*$//
     ''
 endfunction
-nnoremap <Leader>t :call TrimWhiteSpace()<CR>
+command! Trim call TrimWhiteSpace()
 
 " Folding colors that don't make me cry.
 highlight Folded ctermfg=green ctermbg=black
@@ -381,6 +379,10 @@ augroup java_make
     " Just use make. Without any of these fancy neomake plugins or what-not.
     au FileType java set makeprg=javac\ -classpath\ `cat\ .raw-classpath`\ -d\ /tmp\ `find\ .\ -name\ *.java`
     au FileType java set errorformat=%E%f:%l:\ %m,%-Z%p^,%+C%.%#
+    " Copy just the part of the filename used in maven's test plugin to the
+    " clipboard. This is useful for running my java-debug.sh script to start a
+    " debugging session with this test.
+    au FileType command! CopyTestFilename let @+ = expand("%:t:r")
 augroup END
 
 " Defines a collection of commands for making common patterns in Java easier.
@@ -393,6 +395,13 @@ augroup java_generate
         let @c = c
     endfunction
     command! Classname :call GetClassname()
+    " Extracts a variable out of a function signature and creates
+    " a local variable of the same type and name.
+    " So the line:
+    " foo(int x)
+    " becomes
+    " int x = 
+    " foo(x)
     command! ExtractVariable :normal 2yw"_dw0"ay^O<Esc>"app
     nnoremap <Leader>v :ExtractVariable<CR>
 augroup END
