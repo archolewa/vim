@@ -200,6 +200,30 @@ function! GetClassPackage(filename)
     return split(split(package, " ")[1], ";")[0]
 endfunction
 
+function! LoadClasspath()
+  " TODO: Make this a configuration parameter.
+  " Actually, what we *should* do is as part of building the classpath, we augment it with
+  " these directories, since these directories are needed by both vim and the scope construction
+  " script.
+  let classpath = [getcwd(), "/Users/acholewa/sources/java-standard-library", "/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect"]
+  if filereadable(".classpath")
+    let classpath = extend(classpath, readfile(".classpath"))
+  endif
+  return classpath
+endfunction
+
+let classpath = LoadClasspath()
+function! InScope(filename, this_file)
+    for path in g:classpath
+        if match(a:filename, path) > -1
+            " TODO: Make this a configuration parameter
+            let search_command = "ag --nonumbers --nofilename --silent -c -m 1 \"^" . a:filename . ".+" . a:this_file . "\" .scope"
+            return system(search_command) - 1
+        endif
+    endfor
+    return -1
+endfunction
+
 " Given an identifier, returns a dictionary containing two entries:
 " 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
 " 2. taglistindex - The tag's original index in the taglist. This allows us to use
