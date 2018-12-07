@@ -16,6 +16,42 @@
 " matching tags small.
 
 "---------------------------- Tag Based Import ---------------------------------
+
+" Returns all the imports in the current buffer as a list of lists. Each list
+" is a group of imports (i.e. a paragraph) pulled from the buffer.
+" Returns a list containing two values: the group of imports in this buffer,
+" and the line at which the imports end.
+function! GetImportGroups()
+    let cursor_position = getcurpos()
+    let class_start = search('^\(public\|protected\|private\) \(class\|enum\|interface\)', 'w')
+    let class_docs_start = search('/\*\*', 'bWn')
+    if class_docs_start > 0
+        let imports_end = class_docs_start
+    else
+        normal gg
+        let annotation_start = search('^@', 'Wn')
+        if annotation_start > 0 && annotation_start < class_start
+            let imports_end = annotation_start
+        else
+            let imports_end = class_start
+        endif
+    endif
+    call setpos('.', cursor_position)
+
+    let imports = filter(copy(getline(1, imports_end-1)), 'v:val =~ "^import" || v:val =~ "^$"')
+    let importgroups = []
+    let currentgroup = []
+    for line in imports
+        if line =~ '^$'
+            call add(importgroups, currentgroup)
+            let currentgroup = []
+        else
+            call add(currentgroup, line)
+        endif
+    endfor
+    return [importgroups, imports_end]
+endfunction
+
 " Takes an identifier, and pulls out all the matching class tags. Then, asks the
 " user which one they'd like to import. It converts the directory to a package
 " and adds the import to the import section to the appropriate group.
@@ -135,50 +171,16 @@ function! SelectImport(tagidentifier)
     endif
 endfunction
 
-" Returns all the imports in the current buffer as a list of lists. Each list
-" is a group of imports (i.e. a paragraph) pulled from the buffer.
-" Returns a list containing two values: the group of imports in this buffer,
-" and the line at which the imports end.
-function! GetImportGroups()
-    let cursor_position = getcurpos()
-    let class_start = search('^\(public\|protected\|private\) \(class\|enum\|interface\)', 'w')
-    let class_docs_start = search('/\*\*', 'bWn')
-    if class_docs_start > 0
-        let imports_end = class_docs_start
-    else
-        normal gg
-        let annotation_start = search('^@', 'Wn')
-        if annotation_start > 0 && annotation_start < class_start
-            let imports_end = annotation_start
-        else
-            let imports_end = class_start
-        endif
-    endif
-    call setpos('.', cursor_position)
-
-    let imports = filter(copy(getline(1, imports_end-1)), 'v:val =~ "^import" || v:val =~ "^$"')
-    let importgroups = []
-    let currentgroup = []
-    for line in imports
-        if line =~ '^$'
-            call add(importgroups, currentgroup)
-            let currentgroup = []
-        else
-            call add(currentgroup, line)
-        endif
-    endfor
-    return [importgroups, imports_end]
-endfunction
-
-
-
 let directory_cache = {}
 " Takes a filename (as a string), and a dictionary mapping
 " identifiers that start a package to something truthy (i.e. a set), and
 " returns the fully-qualified Java name of the class.
 "
 " This function maintains an (ever-growing) in-memory cache of filenames to
-" packages to keep repeated lookups fast.
+" packages to keep repeated lookups fast. This was more necessary back when
+" we found packages by searching the file for its package statement. Now
+" that we're inspecting the directory in memory, the cache may not be
+" worth it.
 "
 " filename: The name of the file to translate into a fully-qualified name
 " returns A string containing the fully qualified Java class name to import.
@@ -193,6 +195,35 @@ function! Translate_directory(filename)
     endif
     return package . "." . classname
 endfunction
+
+" Populates the quickfix window with a list of all the
+" unused imports in the current module.
+function! TideFindUnusedImports()
+    let unusedimports = []
+    let curpos = getcurpos()
+    let importsEndingLineNumber = GetImportGroups()
+    let imports = importsEndingLineNumber[0]
+    let endingLineNumber = importsEndingLineNumber[1]
+    call setpos('.', [0, endingLineNumber, 1])
+    for group in imports
+        for import in group
+            " Get the imported identifier, without the trailing semi-colon
+            let identifier = split(import, "\\.")[-1]
+            let identifier = split(identifier, ';')[0]
+            if search("\\<" . identifier . "\\>", 'Wnc') == 0
+                let unusedimports = add(unusedimports, import)
+            endif
+        endfor
+    endfor
+    let qflist = []
+    for import in unusedimports
+        let search_pattern = "^" . import . "\\s*$"
+        let qflist = add(qflist, {"pattern": search_pattern, "filename":expand("%")})
+    endfor
+    call setqflist(qflist)
+    call setpos('.', curpos)
+endfunction!
+
 
 " TODO: Make this a configuration parameter.
 let custom_classpath = [getcwd(), "/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect"]
@@ -272,7 +303,7 @@ let lastTags = []
 let lastTagsIndex = -1
 function! TideJumpTag(identifier, count, bang)
     let index = a:count
-    if index == 0 
+    if index == 0
         let index = 1
     endif
     let g:lastTags = FilterTags(a:identifier)
@@ -308,8 +339,8 @@ function! TideTselect(identifier, bang)
         return
     endif
     let g:lastTagsIndex = selection+1
-    let tag = g:lastTags[g:lastTagsIndex]
-    JumpToTag(tag, a:bang, identifier)
+    let tagIndex = g:lastTags[g:lastTagsIndex]
+    call JumpToTag(tagIndex, a:bang, tagIndex.tag.name)
 endfunction
 
 function! Tidetnext(bang)
@@ -340,6 +371,7 @@ endfunction
 
 command! -nargs=1 TideClassName call Translate_directory("<args>")
 command! -nargs=1 -complete=tag TideImport call Import("<args>")
+command! TideUnusedImports call TideFindUnusedImports()
 
 command! -nargs=1 -complete=tag -count -bang Tidetag call TideJumpTag("<args>", "<count>", "<bang>")
 command! -nargs=1 -complete=tag -bang Tidetselect call TideTselect("<args>", "<bang>")
