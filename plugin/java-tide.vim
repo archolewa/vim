@@ -177,7 +177,7 @@ let directory_cache = {}
 " identifiers that start a package to something truthy (i.e. a set), and
 " returns the fully-qualified Java name of the class.
 "
-" This function maintains an (ever-growing) in-memory cache of filenames to 
+" This function maintains an (ever-growing) in-memory cache of filenames to
 " packages to keep repeated lookups fast.
 "
 " filename: The name of the file to translate into a fully-qualified name
@@ -224,47 +224,80 @@ function! InScope(filename, this_file)
     return -1
 endfunction
 
+function! LoadClasspath()
+    let classpath = [getcwd(), "/Users/acholewa/sources/java-standard-library", "/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect"]
+    if filereadable(".classpath")
+        let classpath = extend(classpath, readfile(".classpath"))
+    endif
+    return classpath
+endfunction
+
+let classpath = LoadClasspath()
+
+let inscope_caches = {}
 " Given an identifier, returns a dictionary containing two entries:
 " 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
 " 2. taglistindex - The tag's original index in the taglist. This allows us to use
 " `taglistindex`tag to immediately jump to this tag and add it to the tagstack.
 function! FilterTags(identifier)
-    " TODO: Pull this out into a configuration variable.
-    let classpath = [getcwd(), "/Users/acholewa/sources/java-standard-library", "/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect"]
-    let classpath = extend(classpath, split(system("cat .classpath"), "\n"))
+    let cwd = getcwd()
+    if has_key(g:inscope_caches, cwd) <= 0
+        let g:inscope_caches[cwd] = {}
+    endif
+    let tag_cache = g:inscope_caches[cwd]
     let tags = taglist("^" . a:identifier . "$", @%)
     let filteredtags = []
-    let index = 0
+    let index = -1
     for tag in tags
+        let index = index + 1
         if tag.filename ==# @%
            let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
+        elseif has_key(tag_cache, tag.filename) > 0
+            if tag_cache[tag.filename] > -1
+                let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
+            endif
         else
-            for path in classpath
+            for path in g:classpath
                 if match(tag.filename, path) > -1
+                    let tag_cache[tag.filename] = 1
                     let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
                     break
                 endif
             endfor
+            if has_key(tag_cache, tag.filename) <= 0
+                let tag_cache[tag.filename] = -1
+            endif
         endif
-        let index = index + 1
     endfor
     return filteredtags
 endfunction
 
 function! TideJumpTag(identifier, count, bang)
     let filteredTags = FilterTags(a:identifier)
+    if len(filteredTags) == 0
+        echom("No tags found.")
+        return
+    endif
     let index = max([a:count, len(filteredTags) - 1])
     let tag = filteredTags[index]
-    execute tag.taglistindex . "tag" . a:bang . " " . a:identifier 
+    execute tag.taglistindex . "tag" . a:bang . " " . a:identifier
 endfunction
 
 function! TideTselect(identifier, bang)
     let filteredTagsIndices = FilterTags(a:identifier)
-    let filteredTags = map(copy(filteredTagsIndices), "v:val.tag")
+    if len(filteredTagsIndices) == 0
+        echom("No tags found.")
+        return
+    endif
     " TODO: Pull this out into a configuration parameter.
-    let todisplay = map(copy(filteredTags), 'v:key . "\t" . v:val.kind . "\t" . v:val.name . "\t" . Translate_directory(v:val.filename) . "\n\t\t" . trim(v:val.cmd[2:-3])') " Strip characters used by the search command.
+    let todisplay = map(copy(filteredTagsIndices), 'v:key . "\t" . v:val.tag.kind . "\t" . v:val.tag.name . "\t" . v:val.tag.filename . "\n\t\t" . trim(v:val.tag.cmd[2:-3])') " Strip characters used by the search command.
     let tagliststring = join(todisplay, "\n") . "\n"
     let selection = input(tagliststring)
+    if selection ==# "q" || selection ==# ""
+        return
+    endif
+    let tag = filteredTagsIndices[selection]
+    execute tag.taglistindex . "tag" . a:bang . " " . a:identifier
 endfunction
 
 command! -nargs=1 TideClassName call Translate_directory("<args>")
