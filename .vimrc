@@ -51,7 +51,6 @@ filetype on
 " I find syntax highlighting to be unnecessary visual stimulation. I don't
 " know that syntax highlighting really contributes much.
 syntax off
-
 set backspace=indent,eol,start
 " Hide buffers instead of closing them. Means I don't have to save before
 " switching, and may speed things up maybe?
@@ -169,10 +168,7 @@ nnoremap <Leader>b :cs find s <C-R>=expand("<cword>")<CR><CR>:copen<CR><c-w>k<c-
 " prefilter out matches.
 nnoremap g] :ltag <C-R><C-W><CR>:lopen<CR><c-w>k<c-o><c-w>j
 
-" Let's use my new TideTag command!
-nnoremap <c-]> :Tidetag <C-R><C-W><cr>
-nnoremap <Leader>y :tnext<CR>
-nnoremap <Leader>t :tprevious<CR>
+nnoremap <c-y> :tnext<cr>
 
 " ---------- Buffer management -----------
 " Close current window, without actually closing the buffer. This gives me the
@@ -244,14 +240,6 @@ augroup END
 " Disable tabs. The tabs that Macvim opens when I open a file in an already
 " running instance aren't really "tabs." Besides, I use buffers.
 autocmd BufWinEnter,BufNewFile * silent tabo
-
-" Git shortcuts
-nnoremap <Leader>gs :Gstatus<CR>
-nnoremap <Leader>gb :Gblame<CR>
-nnoremap <Leader>gc :Gcommit<CR>
-" Git lookup
-nnoremap <Leader>gl :Gbrowse<CR>
-vnoremap <Leader>gl :'<,'>Gbrowse<CR>
 
 " Terminal mode customizations
 " Provide a more intuitive, less awkward keymap for exiting terminal mode.
@@ -431,6 +419,15 @@ augroup java_search
     au FileType java vnoremap ]] /^    \(protected\\|private\\|public\)<CR>
     au FileType java onoremap [[ ?^    \(protected\\|private\\|public\)<CR>
     au FileType java onoremap ]] /^    \(protected\\|private\\|public\)<CR>
+augroup END
+
+augroup java_tags
+    autocmd!
+    au FileType java nnoremap <C-[> :Tidetag <C-R><C-W><cr>
+    au FileType java nnoremap g[ :Tidetselect <C-R><C-W><cr>
+    au FileType java nnoremap g<C-[> :Tidetlist<CR>
+    au FileType java nnoremap <C-n> :Tidetnext<CR>
+    au FileType java nnoremap <C-p> :Tidetprevious<CR>
 augroup END
 
 augroup avdl_search

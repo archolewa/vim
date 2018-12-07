@@ -194,57 +194,56 @@ function! Translate_directory(filename)
     return package . "." . classname
 endfunction
 
+" TODO: Make this a configuration parameter.
+let custom_classpath = [getcwd(), "/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect"]
+function! FindClassPathForFile(filename)
+    let directory = fnamemodify(a:filename, ":h")
+    let match_result = match(directory, "/tide-sources")
+    if match_result > - 1
+        " Need to exclude the trailing space.
+        return directory[:match_result-1]
+    else
+        " This happens for files that aren't sources from the classpath and therefore don't live under `tide-sources` somewhere.
+        for path in g:custom_classpath
+            if match(directory, "^" . path) > -1
+                return path
+            endif
+        endfor
+    endif
+endfunction
+
 " Given a filename, returns the package for the Java class in said file.
 function! GetClassPackage(filename)
-    let package = trim(system("ag --nonumbers --nofilename --silent -m 1 \"^package\" " . a:filename))
-    return split(split(package, " ")[1], ";")[0]
+    let fileclasspath = FindClassPathForFile(a:filename)
+    let filepath = fnamemodify(a:filename, ":h")
+    let match_result = matchend(filepath, fileclasspath)
+    let package_path = filepath[match_result+1:]
+    let tide_sources_end = matchend(package_path, "tide-sources/")
+    if tide_sources_end > -1
+        let package_path = package_path[tide_sources_end:]
+    return substitute(package_path, "/", ".", "g")
 endfunction
 
 function! LoadClasspath()
-  " TODO: Make this a configuration parameter.
-  " Actually, what we *should* do is as part of building the classpath, we augment it with
-  " these directories, since these directories are needed by both vim and the scope construction
-  " script.
-  let classpath = [getcwd(), "/Users/acholewa/sources/java-standard-library", "/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect"]
-  if filereadable(".classpath")
-    let classpath = extend(classpath, readfile(".classpath"))
+  let classpath = {expand("~/sources"):1}
+  for path in g:custom_classpath
+        let classpath[path] = 1
+  endfor
+  if filereadable(".raw-classpath")
+    for path in map(split(readfile(".raw-classpath")[0], ":"), "fnamemodify(v:val, ':h')")
+        let classpath[path] = 1
+    endfor
   endif
   return classpath
 endfunction
 
 let classpath = LoadClasspath()
-function! InScope(filename, this_file)
-    for path in g:classpath
-        if match(a:filename, path) > -1
-            " TODO: Make this a configuration parameter
-            let search_command = "ag --nonumbers --nofilename --silent -c -m 1 \"^" . a:filename . ".+" . a:this_file . "\" .scope"
-            return system(search_command) - 1
-        endif
-    endfor
-    return -1
-endfunction
 
-function! LoadClasspath()
-    let classpath = [getcwd(), "/Users/acholewa/sources/java-standard-library", "/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect"]
-    if filereadable(".classpath")
-        let classpath = extend(classpath, readfile(".classpath"))
-    endif
-    return classpath
-endfunction
-
-let classpath = LoadClasspath()
-
-let inscope_caches = {}
 " Given an identifier, returns a dictionary containing two entries:
 " 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
 " 2. taglistindex - The tag's original index in the taglist. This allows us to use
 " `taglistindex`tag to immediately jump to this tag and add it to the tagstack.
 function! FilterTags(identifier)
-    let cwd = getcwd()
-    if has_key(g:inscope_caches, cwd) <= 0
-        let g:inscope_caches[cwd] = {}
-    endif
-    let tag_cache = g:inscope_caches[cwd]
     let tags = taglist("^" . a:identifier . "$", @%)
     let filteredtags = []
     let index = -1
@@ -252,55 +251,97 @@ function! FilterTags(identifier)
         let index = index + 1
         if tag.filename ==# @%
            let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
-        elseif has_key(tag_cache, tag.filename) > 0
-            if tag_cache[tag.filename] > -1
-                let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
-            endif
         else
-            for path in g:classpath
-                if match(tag.filename, path) > -1
-                    let tag_cache[tag.filename] = 1
-                    let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
-                    break
-                endif
-            endfor
-            if has_key(tag_cache, tag.filename) <= 0
-                let tag_cache[tag.filename] = -1
+            let fileclasspath = FindClassPathForFile(tag.filename)
+            if has_key(g:classpath, fileclasspath) > 0
+                let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
             endif
         endif
     endfor
     return filteredtags
 endfunction
 
+function! JumpToTag(tag, bang, identifier)
+    execute a:tag.taglistindex . "tag" . a:bang . " " . a:identifier
+endfunction
+
+" This is used to store the last set of filtered tags
+" for itering through using the Tidetnext and Tidetprevious
+" operators
+let lastTags = []
+let lastTagsIndex = -1
 function! TideJumpTag(identifier, count, bang)
-    let filteredTags = FilterTags(a:identifier)
-    if len(filteredTags) == 0
+    let index = a:count
+    if index == 0 
+        let index = 1
+    endif
+    let g:lastTags = FilterTags(a:identifier)
+    let g:lastTagsIndex = min([index, len(g:lastTags) - 1])
+    if len(g:lastTags) == 0
         echom("No tags found.")
         return
     endif
-    let index = max([a:count, len(filteredTags) - 1])
-    let tag = filteredTags[index]
-    execute tag.taglistindex . "tag" . a:bang . " " . a:identifier
+    let tag = g:lastTags[g:lastTagsIndex]
+    call JumpToTag(tag, a:bang, a:identifier)
+endfunction
+
+function! GetClass(tag)
+    if has_key(a:tag, "class") > 0
+        return "." . a:tag.class
+    endif
+    return ""
 endfunction
 
 function! TideTselect(identifier, bang)
-    let filteredTagsIndices = FilterTags(a:identifier)
-    if len(filteredTagsIndices) == 0
+    let g:lastTags = FilterTags(a:identifier)
+    let g:lastTagsIndex = 0
+    if len(g:lastTags) == 0
         echom("No tags found.")
         return
     endif
     " TODO: Pull this out into a configuration parameter.
-    let todisplay = map(copy(filteredTagsIndices), 'v:key . "\t" . v:val.tag.kind . "\t" . v:val.tag.name . "\t" . v:val.tag.filename . "\n\t\t" . trim(v:val.tag.cmd[2:-3])') " Strip characters used by the search command.
-    let tagliststring = join(todisplay, "\n") . "\n"
+    let header = g:lastTags[0].tag.name
+    let todisplay = map(copy(g:lastTags), 'v:key . "\t" . v:val.tag.kind . "\t" . GetClassPackage(v:val.tag.filename) . GetClass(v:val.tag) . "\n\t\t\t" . trim(v:val.tag.cmd[2:-3])') " Strip characters used by the search command.
+    let tagliststring = header . "\n" . join(todisplay, "\n") . "\n"
     let selection = input(tagliststring)
     if selection ==# "q" || selection ==# ""
         return
     endif
-    let tag = filteredTagsIndices[selection]
-    execute tag.taglistindex . "tag" . a:bang . " " . a:identifier
+    let g:lastTagsIndex = selection+1
+    let tag = g:lastTags[g:lastTagsIndex]
+    JumpToTag(tag, a:bang, identifier)
+endfunction
+
+function! Tidetnext(bang)
+    if (g:lastTagsIndex >= len(g:lastTags) - 1)
+        echom("Reached end of tags.")
+        return
+    endif
+    let g:lastTagsIndex += 1
+    let tagIndex = g:lastTags[g:lastTagsIndex]
+    let identifier = tagIndex.tag.name
+    execute "e " . tagIndex.tag.filename
+    normal gg
+    execute tagIndex.tag.cmd
+endfunction
+
+function! Tidetprevious(bang)
+    if (g:lastTagsIndex <= 0)
+        echom("Reached start of tags.")
+        return
+    endif
+    let g:lastTagsIndex -= 1
+    let tagIndex = g:lastTags[g:lastTagsIndex]
+    let identifier = tagIndex.tag.name
+    execute "e " . tagIndex.tag.filename
+    normal gg
+    execute tagIndex.tag.cmd
 endfunction
 
 command! -nargs=1 TideClassName call Translate_directory("<args>")
 command! -nargs=1 -complete=tag TideImport call Import("<args>")
+
 command! -nargs=1 -complete=tag -count -bang Tidetag call TideJumpTag("<args>", "<count>", "<bang>")
 command! -nargs=1 -complete=tag -bang Tidetselect call TideTselect("<args>", "<bang>")
+command! -bang Tidetnext call Tidetnext("<bang>")
+command! -bang Tidetprevious call Tidetprevious("<bang>")
