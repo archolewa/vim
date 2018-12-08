@@ -365,12 +365,12 @@ augroup END
 augroup java_make
     autocmd!
     " Just use make. Without any of these fancy neomake plugins or what-not.
-    au FileType java set makeprg=javac\ -classpath\ `cat\ .raw-classpath`\ -d\ /tmp\ `find\ .\ -name\ *.java`
+    au FileType java set makeprg=javac\ -g:none\ -nowarn\ -classpath\ `cat\ .raw-classpath`\ -d\ /tmp\ `find\ .\ -name\ *.java`
     au FileType java set errorformat=%E%f:%l:\ %m,%-Z%p^,%+C%.%#
     " Copy just the part of the filename used in maven's test plugin to the
     " clipboard. This is useful for running my java-debug.sh script to start a
     " debugging session with this test.
-    au FileType command! CopyTestFilename let @+ = expand("%:t:r")
+    au FileType java command! CopyTestFilename let @+ = expand("%:t:r")
 augroup END
 
 " Defines a collection of commands for making common patterns in Java easier.
@@ -394,8 +394,6 @@ augroup java_generate
     nnoremap <Leader>v :ExtractVariable<CR>
 augroup END
 
-" Groups for working with search. This allows for easily jumping to various
-" landmarks in a file. The landmarks vary based on language.
 augroup java_search
     autocmd!
     " Find classes that implement this interface.
@@ -423,9 +421,9 @@ augroup END
 
 augroup java_tags
     autocmd!
-    au FileType java nnoremap <C-[> :Tidetag <C-R><C-W><cr>
-    au FileType java nnoremap g[ :Tidetselect <C-R><C-W><cr>
-    au FileType java nnoremap g<C-[> :Tidetlist<CR>
+    au FileType java nnoremap <C-\> :Tidetag <C-R><C-W><cr>
+    au FileType java nnoremap g\ :Tidetselect <C-R><C-W><cr>
+    au FileType java nnoremap g<C-\> :Tidetlist<CR>
     au FileType java nnoremap <C-n> :Tidetnext<CR>
     au FileType java nnoremap <C-p> :Tidetprevious<CR>
 augroup END
