@@ -156,7 +156,6 @@ function! SelectImport(tagidentifier)
     let tags = uniq(filter(tags, 'index(["c", "i", "e", "g"], v:val["kind"]) > -1'))
     let filenames = map(tags, 'v:val["filename"]')
     let imports = uniq(sort(filter(map(filenames, 'Translate_directory(v:val)'), 'len(v:val)')))
-    " let imports = uniq(sort(filter(map(filenames, 'Translate_directory(v:val)'), 'len(v:val)')))
     if len(imports) == 1
         return imports[0]
     else
@@ -252,44 +251,68 @@ function! GetClassPackage(filename)
     let tide_sources_end = matchend(package_path, "tide-sources/")
     if tide_sources_end > -1
         let package_path = package_path[tide_sources_end:]
+    endif
     return substitute(package_path, "/", ".", "g")
 endfunction
 
 function! LoadClasspath()
-  let classpath = {expand("~/sources"):1}
-  for path in g:custom_classpath
+    "TODO: Pull out into a configuration parameter.
+    let classpath = {expand("~/sources"):1}
+    for path in g:custom_classpath
         let classpath[path] = 1
-  endfor
-  if filereadable(".raw-classpath")
+    endfor
+    if filereadable(".raw-classpath")
     for path in map(split(readfile(".raw-classpath")[0], ":"), "fnamemodify(v:val, ':h')")
         let classpath[path] = 1
     endfor
-  endif
-  return classpath
+    endif
+    return classpath
 endfunction
 
-let classpath = LoadClasspath()
+let classpath = {}
 
-" Given an identifier, returns a dictionary containing two entries:
+" Given an identifier, returns a list of dictionaries containing two entries:
 " 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
 " 2. taglistindex - The tag's original index in the taglist. This allows us to use
 " `taglistindex`tag to immediately jump to this tag and add it to the tagstack.
+" The list is partially sorted, so that tags that appear in the current package and
+" imports are put first.
 function! FilterTags(identifier)
+    let cwd = getcwd()
+    if has_key(g:classpath, cwd) <= 0
+        let g:classpath[cwd] = LoadClasspath()
+    endif
+    let classpath = g:classpath[cwd]
     let tags = taglist("^" . a:identifier . "$", @%)
+    let infiletags = []
+    let inscopetags = []
     let filteredtags = []
-    let index = -1
+    let importsmap = {GetClassPackage(expand("%")):1}
+    let imports = GetImportGroups()[0]
+    for group in imports
+        for import in group
+            let package = split(split(import)[1], ';')[0]
+            let importsmap[package] = 1
+        endfor
+    endfor
+    let index = 0
     for tag in tags
         let index = index + 1
         if tag.filename ==# @%
-           let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
+           let infiletags = add(infiletags, {"tag": tag, "taglistindex": index})
         else
             let fileclasspath = FindClassPathForFile(tag.filename)
-            if has_key(g:classpath, fileclasspath) > 0
-                let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
+            if has_key(classpath, fileclasspath) > 0
+                let tagAndIndex = {"tag": tag, "taglistindex": index}
+                if has_key(importsmap, Translate_directory(tag.filename)) > 0
+                    let inscopetags = add(inscopetags, tagAndIndex)
+                else
+                    let filteredtags = add(filteredtags, tagAndIndex)
+                endif
             endif
         endif
     endfor
-    return filteredtags
+    return extend(extend(infiletags, inscopetags), filteredtags)
 endfunction
 
 function! JumpToTag(tag, bang, identifier)
@@ -302,16 +325,12 @@ endfunction
 let lastTags = []
 let lastTagsIndex = -1
 function! TideJumpTag(identifier, count, bang)
-    let index = a:count
-    if index == 0
-        let index = 1
-    endif
     let g:lastTags = FilterTags(a:identifier)
-    let g:lastTagsIndex = min([index, len(g:lastTags) - 1])
     if len(g:lastTags) == 0
         echom("No tags found.")
         return
     endif
+    let g:lastTagsIndex = min([a:count, len(g:lastTags) - 1])
     let tag = g:lastTags[g:lastTagsIndex]
     call JumpToTag(tag, a:bang, a:identifier)
 endfunction
@@ -332,13 +351,13 @@ function! TideTselect(identifier, bang)
     endif
     " TODO: Pull this out into a configuration parameter.
     let header = g:lastTags[0].tag.name
-    let todisplay = map(copy(g:lastTags), 'v:key . "\t" . v:val.tag.kind . "\t" . GetClassPackage(v:val.tag.filename) . GetClass(v:val.tag) . "\n\t\t\t" . trim(v:val.tag.cmd[2:-3])') " Strip characters used by the search command.
+    let todisplay = map(copy(g:lastTags), 'v:key+1 . "\t" . v:val.tag.kind . "\t" . GetClassPackage(v:val.tag.filename) . GetClass(v:val.tag) . "\n\t\t\t" . trim(v:val.tag.cmd[2:-3])') " Strip characters used by the search command.
     let tagliststring = header . "\n" . join(todisplay, "\n") . "\n"
     let selection = input(tagliststring)
     if selection ==# "q" || selection ==# ""
         return
     endif
-    let g:lastTagsIndex = selection+1
+    let g:lastTagsIndex = selection-1
     let tagIndex = g:lastTags[g:lastTagsIndex]
     call JumpToTag(tagIndex, a:bang, tagIndex.tag.name)
 endfunction
