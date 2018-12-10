@@ -270,7 +270,8 @@ function! LoadClasspath()
 endfunction
 
 let classpath = {}
-
+" TODO: Pull out into a configuration parameter.
+let max_tags = 8
 " Given an identifier, returns a list of dictionaries containing two entries:
 " 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
 " 2. taglistindex - The tag's original index in the taglist. This allows us to use
@@ -288,31 +289,36 @@ function! FilterTags(identifier)
     let inscopetags = []
     let filteredtags = []
     let importsmap = {GetClassPackage(expand("%")):1}
-    let imports = GetImportGroups()[0]
-    for group in imports
+    for group in GetImportGroups()[0]
         for import in group
             let package = split(split(import)[1], ';')[0]
             let importsmap[package] = 1
         endfor
     endfor
     let index = 0
+    let tagcount = 0
     for tag in tags
+        if tagcount >= g:max_tags
+            break
+        endif 
         let index = index + 1
         if tag.filename ==# @%
            let infiletags = add(infiletags, {"tag": tag, "taglistindex": index})
+           let tagcount += 1
         else
             let fileclasspath = FindClassPathForFile(tag.filename)
             if has_key(classpath, fileclasspath) > 0
                 let tagAndIndex = {"tag": tag, "taglistindex": index}
                 if has_key(importsmap, Translate_directory(tag.filename)) > 0
                     let inscopetags = add(inscopetags, tagAndIndex)
+                    let tagcount += 1
                 else
                     let filteredtags = add(filteredtags, tagAndIndex)
                 endif
             endif
         endif
     endfor
-    return extend(extend(infiletags, inscopetags), filteredtags)
+    return extend(extend(infiletags, inscopetags), filteredtags)[:g:max_tags-1]
 endfunction
 
 function! JumpToTag(tag, bang, identifier)
