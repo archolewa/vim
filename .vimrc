@@ -12,6 +12,7 @@ au BufNewFile,BufRead *.json, set filetype=javascript
 au BufNewFile,BufRead *.java, set filetype=java
 au BufRead,BufNewFile *.ebnf set filetype=ebnf
 au BufRead,BufNewFile *.avdl set filetype=avdl
+au BufRead,BufNewFile *.diff set filetype=diff
 
 " Disable netrw.
 let loaded_netrwPlugin = 1
@@ -26,15 +27,6 @@ set nobackup
 " have intelligent matching of lua blocks (which also terminate with the
 " `end` keyword).
 runtime macros/matchit.vim
-
-" yank to clipboard
-if has("clipboard")
-  set clipboard=unnamed " copy to the system clipboard
-
-  if has("unnamedplus") " X11 support
-    set clipboard+=unnamedplus
-  endif
-endif
 
 if has('python3')
     silent! python3 1
@@ -77,7 +69,7 @@ highlight ColorColumn ctermbg=8
 " Run a case insensitive search. By default, run case sensitive searches
 nnoremap <Leader>/ //c
 set foldmethod=indent
-set path=.
+set path=.,,
 set incsearch
 set tags=./tags;~/tags
 set splitright
@@ -91,6 +83,7 @@ set nolist
 " (so far as I know) a way to jump directly to a match. If you need to cycle
 " through them anyway, might as well cycle through them.
 set completeopt=
+set pumheight=1
 set complete=.,w,b
 
 function! ToggleStatusLine()
@@ -127,15 +120,9 @@ nnoremap <Leader>w :ArgWrap<CR>
 
 " Search, but don't jump to the first result.
 nnoremap <Leader>s :Ack!<Space>
-" Search in current file.
-nnoremap <Leader>sf :vimgrep <C-r>%<C-f><Esc>F<Space>a
-" Search for character under the cursor
-nnoremap <Leader>sc :Ack! <C-r><C-w><CR>
-" Search in particular file types
-nnoremap <Leader>sj :Ack! --java<Space>
-nnoremap <Leader>sg :Ack! --groovy<Space>
-nnoremap <Leader>sl :Ack! --lua<Space>
-nnoremap <Leader>sp :Ack! --python<Space>
+" Search in current file (d is between s and f on 
+" my keyboard, i.e. 'search file'.
+nnoremap <Leader>d :vimgrep <C-r>%<C-f><Esc>F<Space>a
 
 " ------- Code exploration ----------
 
@@ -162,10 +149,6 @@ nnoremap <Leader>b :cs find s <C-R>=expand("<cword>")<CR><CR>:copen<CR><c-w>k<c-
 
 " Open the location list with all identifiers that match the tag under the
 " cursor, without jumping to any of them.
-" TODO: Figure out a way to interrogate the location list, and automatically
-" jump if there is one entry in the list. That, or figure out how to do some
-" inspection to the left and right so that I can apply some heuristics to
-" prefilter out matches.
 nnoremap g] :ltag <C-R><C-W><CR>:lopen<CR><c-w>k<c-o><c-w>j
 
 nnoremap <c-y> :tnext<cr>
@@ -175,16 +158,13 @@ nnoremap <c-y> :tnext<cr>
 " ability to quickly open and close splits and what-not, while still being able
 " to easily jump to the desired buffer.
 nnoremap <space>d <C-w>c<CR>
-" If you *really* want to close the buffer.
-nnoremap <space>D :bd<CR>
 
 "  Commands for navigating buffers and files.
-" Regex File search
-nnoremap <Leader>f :e **/<c-f>
-" Regex buffer search.
-nnoremap gt :filter ## ls<c-f>BB
+" Wildcard File search
+nnoremap <Leader>f q:ie **/
 " This allows me to type in the buffer number, and press , to jump to
 " that buffer. I hardly ever use f or t, so I'm not losing much here.
+" Also makes it very easy to flip between the current and alternate buffer.
 nnoremap , <C-^>
 
 " Jump to next error.
@@ -198,7 +178,7 @@ command! CopyFilename let @+ = expand("%")
 " ------ Line diffs ------
 "
 " This allows me to quickly open a diff of two particular lines. *Very* useful
-" when looking at test failure outputs from some test frameworks (like Spock).
+" when looking at test failure outputs for complex data structures. 
 vnoremap <Leader>ld :'<,'>Linediff<CR>
 nnoremap <Leader>le :LinediffReset<CR>
 
@@ -208,13 +188,6 @@ function! TrimWhiteSpace()
     ''
 endfunction
 command! Trim call TrimWhiteSpace()
-
-" Folding colors that don't make me cry.
-highlight Folded ctermfg=green ctermbg=black
-hi clear SpellBad
-hi SpellBad cterm=underline
-let g:tex_fold_enabled=0
-let g:markdown_fold_style = 'nested'
 
 " Should start using this instead of Caps Lock as escape, much more portable.
 inoremap jj <Esc>
@@ -264,7 +237,7 @@ highlight DiffChange guibg=NONE guifg=NONE
 set lazyredraw
 
 " ----Completions ----
-" We use the default <c-p> for keyword (text) completion. The bindings have
+" The bindings have
 " zero mnmemonic value, they're selected for being convenient to type.
 " file completion
 inoremap <c-h> <c-x><c-f>
@@ -292,9 +265,6 @@ au ColorScheme * hi ErrorMsg NONE
 au GuiEnter * hi Error NONE
 au GuiEnter * hi ErrorMsg NONE
 
-" Toggle numbers. Mostly for working with others.
-nnoremap <Space>n :set invnu<CR>
-
 " Allows me to cycle forward/backward through these pairs using %, g% [%, ]%
 " etc.
 let b:match_words='\[:\],<:>,\(:\),{:}'
@@ -302,7 +272,7 @@ let b:match_words='\[:\],<:>,\(:\),{:}'
 " Indent to the same level as the previous line with text. There isn't any
 " mnemonic for this, because it's optimized for typing speed and ease, since
 " I'll be doing it often. Because I don't want the computer indenting for me.
-imap jk <Esc>:let x=@/<CR>?^\s*\S<CR>"yy^<c-o>"yP:let @/=x<CR>a
+inoremap jk <Esc>:let x=@/<CR>?^\s*\S<CR>"yy^<c-o>"yP:let @/=x<CR>a
 
 " Delete the current line, then paste it below the one we're on now.
 nnoremap - ddp
@@ -338,27 +308,31 @@ augroup java_format
     au FileType java command! LongLines /^.\{120\}
 augroup END
 
+function! Translate_javaclasspath()
+    let classpath=".,,src/main/java,src/main/test,"
+    if filereadable(".raw-classpath")
+        let java_classpath = join(map(split(readfile(".raw-classpath")[0], ":"), 'fnamemodify(v:val, ":h") . "/tide-sources/"'), ",")
+    else
+        let java_classpath = ""
+    endif
+    return classpath . java_classpath
+endfunction
+
 augroup java_include
     set tags=tags,~/tags
     autocmd!
     au FileType java set include=^import\ \\zs.\\{-\\}\\ze;
-    au FileType java set path-=/usr/include
+    au FileType java execute "set path=".Translate_javaclasspath()
     " Enable gf on import statements.  Convert . in the package
     " name to / and append .java to the name, then search the path.
     " Also allows using [i, but that's *way* too slow. 
     au FileType java set includeexpr=substitute(v:fname,'\\.','/','g')
     au FileType java set suffixesadd=.java
-    au FileType java set path+=~/sources/java-standard-library
-    au FileType java set path+=~/gozer/purplebox-ws-public-v1/src/main/java
-    au FileType java set path+=~/fili/fili-core/src/main/java/src/main/java
-    au FileType java set path+=~/gozer/flurry/dataLogConsumer/src
-    au FileType java set path+=~/gozer/flurry/dbAccessLayer/src
-    au FileType java set path+=~/gozer/flurry/hibernateCommon/src
-    au FileType java set path+=~/gozer/flurry/util/src
-    au FileType java set path+=~/gozer/railsplitter-ws/src/main/java
-    au FileType java set path+=~/gozer/zuul-ws/src/main/java/
-    au FileType java set path+=~/sources
     command! Classname :let @@ = Translate_directory(@%)
+augroup END
+
+augroup java_completion
+    au FileType java set omnifunc=TideOmniFunction
 augroup END
 
 " Make for java, using javac.
@@ -411,16 +385,28 @@ augroup java_search
     " Allows me to jump to the start of a method definition in a class, since
     " all methods are indented 4 spaces in the Java projects I work on.
     " We also don't make use of package-private.
-    au FileType java nnoremap [[ ?^    \(protected\\|private\\|public\)<CR>
-    au FileType java nnoremap ]] /^    \(protected\\|private\\|public\)<CR>
-    au FileType java vnoremap [[ ?^    \(protected\\|private\\|public\)<CR>
-    au FileType java vnoremap ]] /^    \(protected\\|private\\|public\)<CR>
-    au FileType java onoremap [[ ?^    \(protected\\|private\\|public\)<CR>
-    au FileType java onoremap ]] /^    \(protected\\|private\\|public\)<CR>
+    au FileType java nnoremap [[ ?^ \{4\}\(protected\\|private\\|public\)<CR>
+    au FileType java nnoremap ]] /^ \{4\}\(protected\\|private\\|public\)<CR>
+    au FileType java vnoremap [[ ?^ \{4\}\(protected\\|private\\|public\)<CR>
+    au FileType java vnoremap ]] /^ \{4\}\(protected\\|private\\|public\)<CR>
+    au FileType java onoremap [[ ?^ \{4\}\(protected\\|private\\|public\)<CR>
+    au FileType java onoremap ]] /^ \{4\}\(protected\\|private\\|public\)<CR>
+    au FileType java nnoremap [\ ?^ \{4\}}$?e<CR>
+    au FileType java nnoremap ]\ /^ \{4\}}$/e<CR>
+    au FileType java vnoremap [\ ?^ \{4\}}$?e<CR>
+    au FileType java vnoremap ]\ /^ \{4\}}$/e<CR>
+    au FileType java onoremap [\ ?^ \{4\}}$?e<CR>
+    au FileType java onoremap ]\ /^ \{4\}}$/e<CR>
+
+    " Allows me to customize gd to understand Java functions.
+    au FileType java nmap gd "syiw<CR>[[ /<C-R>s<CR>
 augroup END
 
 augroup java_tags
     autocmd!
+    " Allows me to jump to the start of a method definition in a class, since
+    " all methods are indented 4 spaces in the Java projects I work on.
+    " We also don't make use of package-private.
     au FileType java nnoremap <C-\> :Tidetag <C-R><C-W><cr>
     au FileType java nnoremap g\ :Tidetselect <C-R><C-W><cr>
     au FileType java nnoremap g<C-\> :Tidetlist<CR>
@@ -430,9 +416,6 @@ augroup END
 
 augroup avdl_search
     autocmd!
-    " Allows me to jump to the start of a method definition in a class, since
-    " all methods are indented 4 spaces in the Java projects I work on.
-    " We also don't make use of package-private.
     au FileType avdl nnoremap [[ ?^  record<CR>
     au FileType avdl nnoremap ]] /^  record<CR>
     au FileType avdl vnoremap [[ ?^  record<CR>
@@ -487,6 +470,33 @@ augroup markdown_overview
     au FileType markdown command! Outline :call Outline("^#")
 augroup END 
 
+" --- Git Review Diffs -- 
+" Defines a collection of commands for navigating git diffs,
+" where diffs are displayed using --word-diff=plain
+augroup git_review_diffs
+    autocmd!
+    command! NextDiff call search("{+\\|[-")
+    command! PreviousDiff call search("{+\\|[-", "b")
+    " By using search, we can repeat searches for arbitrary
+    " file patterns with `n`.
+    command! -nargs=1 FindFile /^++.*<args>
+    command! NextFile call search("^++")
+    command! PreviousFile call search("^++", "b")
+
+    au FileType diff nnoremap [[ :PreviousFile<CR>zt
+    au FileType diff nnoremap ]] :NextFile<CR>zt
+    au FileType diff vnoremap [[ :PreviousFile<CR>zt
+    au FileType diff vnoremap ]] :NextFile<CR>zt
+    au FileType diff onoremap [[ :PreviousFile<CR>zt
+    au FileType diff onoremap ]] :NextFile<CR>zt
+    au FileType diff nnoremap <Leader>p :PreviousDiff<CR>
+    au FileType diff nnoremap <Leader>n :NextDiff<CR>
+    au FileType diff vnoremap <Leader>p :PreviousDiff<CR>
+    au FileType diff vnoremap <Leader>n :NextDiff<CR>
+    au FileType diff onoremap <Leader>p :PreviousDiff<CR>
+    au FileType diff onoremap <Leader>n :NextDiff<CR>
+augroup END
+
 " --- Quickfix ---
 " This manages autocommands for keeping the quickfix tame. 
 " I rely heavily on searching, tags, and cscope. However 
@@ -518,5 +528,6 @@ source ~/.vim/private.vim
 
 " Display the current file name.
 nnoremap <space>f :echom @%<CR>
+
 
 command! -nargs=1 InsertPath r!find ~/ -name <args>
