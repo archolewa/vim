@@ -6,14 +6,16 @@
 "
 " The second is smarter tag searching. The idea is to provide tide-versions of
 " every vim tag function that does the same thing, except it filters the tag
-" list down to only those identifiers in the classpath.
+" list down to only those identifiers in the classpath, and groups them based
+" on scoping (this file, direct dependencies, this package, this classpath)
+" to increase the chances the desired tag is near the front.
 "
-" The third is classpath-aware tag completion.
+" The third is tag completion that leverages the same logic as tag selection.
 "
 " The fundamental idea combining all this functionality is scope-aware
 " tags. Adding imports expands the scope where we can find tags. Tag jumping
 " and omnicompletion takes advantage of scope awareness to keep the list of
-" matching tags small.
+" matching tags small and accurate.
 
 "---------------------------- Tag Based Import ---------------------------------
 
@@ -62,8 +64,12 @@ function! Import(tagidentifier)
     endif
     let import_statement = "import " . chosen_import . ";"
     let original_search = @/
+    if match(import_statement, "^import java.lang") > -1
+        echom("Not adding redundant java.lang import.")
+        return
+    endif
     if search(import_statement, 'wn')
-        echo("\rImport " . chosen_import . " already exists.")
+        echom("Import " . chosen_import . " already exists.")
         return
     endif
     let [import_groups, imports_end] = GetImportGroups()
@@ -93,7 +99,7 @@ function! ExtractGroup(import_groups, packages)
             return group
         endif
     endfor
-    echo("ERROR: Unknown group " . string(a:packages))
+    echom("ERROR: Unknown group " . string(a:packages))
 endfunction
 
 " Given a list of import groups, the import to add, and the statement for
@@ -149,10 +155,12 @@ function! AddNewGroup(import_groups, import_statement, new_import_index, group_o
     endif
 endfunction
 
+" TODO: Pull out into a configuration parameter.
+let max_import_tags = 20
 " Given a tagidentifier, asks the user which class they would like to import,
 " and returns the fully qualified class name of the selection.
 function! SelectImport(tagidentifier)
-    let tags = map(FilterTags(a:tagidentifier), 'v:val.tag')
+    let tags = map(FilterTags(a:tagidentifier, g:max_import_tags, 0), 'v:val.tag')
     let tags = uniq(filter(tags, 'index(["c", "i", "e", "g"], v:val["kind"]) > -1'))
     let filenames = map(tags, 'v:val["filename"]')
     let imports = uniq(sort(filter(map(filenames, 'Translate_directory(v:val)'), 'len(v:val)')))
@@ -170,28 +178,15 @@ function! SelectImport(tagidentifier)
     endif
 endfunction
 
-let directory_cache = {}
-" Takes a filename (as a string), and a dictionary mapping
-" identifiers that start a package to something truthy (i.e. a set), and
+" Takes a filename (as a string) and
 " returns the fully-qualified Java name of the class.
-"
-" This function maintains an (ever-growing) in-memory cache of filenames to
-" packages to keep repeated lookups fast. This was more necessary back when
-" we found packages by searching the file for its package statement. Now
-" that we're inspecting the directory in memory, the cache may not be
-" worth it.
 "
 " filename: The name of the file to translate into a fully-qualified name
 " returns A string containing the fully qualified Java class name to import.
 function! Translate_directory(filename)
     let no_extension = fnamemodify(a:filename, ":p:r")
     let classname = fnamemodify(no_extension, ":t")
-    if has_key(g:directory_cache, a:filename) > 0
-        let package = g:directory_cache[a:filename]
-    else
-        let package = GetClassPackage(a:filename)
-        let g:directory_cache[a:filename] = package
-    endif
+    let package = GetClassPackage(a:filename)
     return package . "." . classname
 endfunction
 
@@ -225,7 +220,7 @@ endfunction!
 
 
 " TODO: Make this a configuration parameter.
-let custom_classpath = [getcwd(), "/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect"]
+let custom_classpath = ["/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect", "target/generated-sources/avro"]
 function! FindClassPathForFile(filename)
     let directory = fnamemodify(a:filename, ":h")
     let match_result = match(directory, "/tide-sources")
@@ -234,6 +229,12 @@ function! FindClassPathForFile(filename)
         return directory[:match_result-1]
     else
         " This happens for files that aren't sources from the classpath and therefore don't live under `tide-sources` somewhere.
+        let workingDirectory = getcwd()
+        let workingDirectoryMatch = matchend(directory, "^" . workingDirectory)
+        if workingDirectoryMatch > -1
+            let packageStart = match(directory, "com\\|org\\|java\\|io\\|javax\\|net\\|edu", workingDirectoryMatch)
+            return directory[:packageStart-2]
+        endif
         for path in g:custom_classpath
             if match(directory, "^" . path) > -1
                 return path
@@ -244,32 +245,25 @@ endfunction
 
 " Given a filename, returns the package for the Java class in said file.
 function! GetClassPackage(filename)
-    let fileclasspath = FindClassPathForFile(a:filename)
     let filepath = fnamemodify(a:filename, ":h")
+    let fileclasspath = FindClassPathForFile(a:filename)
     let match_result = matchend(filepath, fileclasspath)
     let package_path = filepath[match_result+1:]
     let tide_sources_end = matchend(package_path, "tide-sources/")
     if tide_sources_end > -1
         let package_path = package_path[tide_sources_end:]
+    else
+        let test_code = matchend(filepath, "src/test/java/")
+        if test_code > -1
+            let package_path = filepath[test_code:]
+        else
+            " TODO: Pull src/main/java out into a configuration parameter.
+            let package_path = filepath[matchend(a:filename, "src/main/java/"):]
+        endif
     endif
     return substitute(package_path, "/", ".", "g")
 endfunction
 
-function! LoadClasspath()
-    "TODO: Pull out into a configuration parameter.
-    let classpath = {expand("~/sources"):1}
-    for path in g:custom_classpath
-        let classpath[path] = 1
-    endfor
-    if filereadable(".raw-classpath")
-    for path in map(split(readfile(".raw-classpath")[0], ":"), "fnamemodify(v:val, ':h')")
-        let classpath[path] = 1
-    endfor
-    endif
-    return classpath
-endfunction
-
-let classpath = {}
 " TODO: Pull out into a configuration parameter.
 let max_tags = 8
 " Given an identifier, returns a list of dictionaries containing two entries:
@@ -278,16 +272,17 @@ let max_tags = 8
 " `taglistindex`tag to immediately jump to this tag and add it to the tagstack.
 " The list is partially sorted, so that tags that appear in the current package and
 " imports are put first.
-function! FilterTags(identifier)
-    let cwd = getcwd()
-    if has_key(g:classpath, cwd) <= 0
-        let g:classpath[cwd] = LoadClasspath()
+function! FilterTags(identifier, maxtags, partial)
+    if a:partial
+        let tags = taglist("^" . a:identifier . "\\C", @%)
+    else
+        let tags = taglist("^" . a:identifier . "$", @%)
     endif
-    let classpath = g:classpath[cwd]
-    let tags = taglist("^" . a:identifier . "$", @%)
     let infiletags = []
     let inscopetags = []
     let filteredtags = []
+    let thisprojecttags = []
+    let javalangtags = []
     let importsmap = {GetClassPackage(expand("%")):1}
     for group in GetImportGroups()[0]
         for import in group
@@ -298,27 +293,29 @@ function! FilterTags(identifier)
     let index = 0
     let tagcount = 0
     for tag in tags
-        if tagcount >= g:max_tags
+        if tagcount >= a:maxtags
             break
-        endif 
+        endif
         let index = index + 1
-        if tag.filename ==# @%
+        let tagAndIndex = {"tag": tag, "taglistindex": index}
+        if match(tag.filename, @%) > -1
            let infiletags = add(infiletags, {"tag": tag, "taglistindex": index})
            let tagcount += 1
         else
-            let fileclasspath = FindClassPathForFile(tag.filename)
-            if has_key(classpath, fileclasspath) > 0
-                let tagAndIndex = {"tag": tag, "taglistindex": index}
-                if has_key(importsmap, Translate_directory(tag.filename)) > 0
-                    let inscopetags = add(inscopetags, tagAndIndex)
-                    let tagcount += 1
-                else
-                    let filteredtags = add(filteredtags, tagAndIndex)
-                endif
+            if GetClassPackage(tag.filename) == "java.lang"
+                let javalangtags = add(javalangtags, tagAndIndex)
+            elseif has_key(importsmap, Translate_directory(tag.filename)) > 0
+                let inscopetags = add(inscopetags, tagAndIndex)
+                let tagcount += 1
+            else
+                let filteredtags = add(filteredtags, tagAndIndex)
             endif
         endif
     endfor
-    return extend(extend(infiletags, inscopetags), filteredtags)[:g:max_tags-1]
+    let result = extend(infiletags, inscopetags)
+    let result = extend(result, javalangtags)
+    let result = extend(result, thisprojecttags)
+    return extend(result, filteredtags)[:a:maxtags-1]
 endfunction
 
 function! JumpToTag(tag, bang, identifier)
@@ -331,7 +328,7 @@ endfunction
 let lastTags = []
 let lastTagsIndex = -1
 function! TideJumpTag(identifier, count, bang)
-    let g:lastTags = FilterTags(a:identifier)
+    let g:lastTags = FilterTags(a:identifier, g:max_tags, 0)
     if len(g:lastTags) == 0
         echom("No tags found.")
         return
@@ -348,8 +345,12 @@ function! GetClass(tag)
     return ""
 endfunction
 
+function! TideDisplayTagInfo(tag, signature)
+    return GetClassPackage(a:tag.filename) . GetClass(a:tag) . "\n\t\t\t" . a:signature
+endfunction
+
 function! TideTselect(identifier, bang)
-    let g:lastTags = FilterTags(a:identifier)
+    let g:lastTags = FilterTags(a:identifier, g:max_tags, 0)
     let g:lastTagsIndex = 0
     if len(g:lastTags) == 0
         echom("No tags found.")
@@ -357,7 +358,7 @@ function! TideTselect(identifier, bang)
     endif
     " TODO: Pull this out into a configuration parameter.
     let header = g:lastTags[0].tag.name
-    let todisplay = map(copy(g:lastTags), 'v:key+1 . "\t" . v:val.tag.kind . "\t" . GetClassPackage(v:val.tag.filename) . GetClass(v:val.tag) . "\n\t\t\t" . trim(v:val.tag.cmd[2:-3])') " Strip characters used by the search command.
+    let todisplay = map(copy(g:lastTags), 'v:key+1 . "\t" . v:val.tag.kind. "\t" . TideDisplayTagInfo(v:val.tag, GetTagSignature(v:val.tag))')
     let tagliststring = header . "\n" . join(todisplay, "\n") . "\n"
     let selection = input(tagliststring)
     if selection ==# "q" || selection ==# ""
@@ -392,6 +393,87 @@ function! Tidetprevious(bang)
     execute "e " . tagIndex.tag.filename
     normal gg
     execute tagIndex.tag.cmd
+endfunction
+
+function! GetTagSignature(tag)
+    " The line containing the tag without the
+    " search pattern.
+    let tag_line = trim(a:tag.cmd[2:-3])
+    if a:tag.kind ==# "c" || a:tag.kind == "m"
+        let lines = readfile(a:tag.filename)
+        let found_tag = -1
+        let signature = []
+        for line in lines
+            if found_tag >= 0
+                let signature_end = match(line, "{\\|;")
+                if signature_end > -1
+                    let signature = add(signature, trim(line[:signature_end-1]))
+                else
+                    let argument = trim(line)
+                    if match(argument, ",$") > -1
+                        let argument = argument . " "
+                    endif
+                    let signature = add(signature, argument)
+                endif
+                if signature_end > -1
+                    break
+                endif
+            else
+                let found_tag = match(line, escape(tag_line, "*"). "$")
+                if found_tag > -1
+                    let signature_start = match(line, a:tag.name)
+                    let trimmed_line = line[signature_start:]
+                    let signature_end = match(trimmed_line, "{\\|;")
+                    if signature_end > -1
+                        let trimmed_line = trimmed_line[:signature_end-1]
+                    endif
+                    let signature = add(signature, trimmed_line)
+                    if signature_end > -1
+                        break
+                    endif
+                endif
+            endif
+        endfor
+        return trim(join(signature, ''))
+    endif
+    return tag_line
+endfunction
+
+let partialTagCache = {}
+function! TideOmniFunction(findstart, base)
+    if has_key(g:partialTagCache, @%) == 0
+        let g:partialTagCache[@%] = {}
+    endif
+    if a:findstart
+        normal b
+        return col('.')-1
+    endif
+    let thisPartialMatchCache = g:partialTagCache[@%]
+    if has_key(thisPartialMatchCache, a:base)
+        return thisPartialMatchCache[a:base]
+    endif
+    " TODO: Pull out complete tags number into a config parameter.
+    let matchingtags = FilterTags(a:base, 50, 1)
+    let result = []
+    let already_seen_signatures = {}
+    for tagIndex in matchingtags
+        let tag = tagIndex.tag
+        " TODO: Pull out into a flag.
+        if tag.kind !=# "m"
+            continue
+        endif
+        " TODO: Pull out a flag that allows people to turn the signatures on and off.
+        let signature = GetTagSignature(tag)
+        if has_key(already_seen_signatures, signature)
+            continue
+        endif
+        let already_seen_signatures[signature] = 1
+        " TODO: Pull out a flag that allows you to turn off signature duplicates.
+        let matchingDictionary = {"word": signature, "menu": GetClassPackage(tag.filename), "info": TideDisplayTagInfo(tag, GetTagSignature(tag)), "dup": 1}
+        let result = add(result, matchingDictionary)
+    endfor
+    let thisPartialMatchCache[a:base] = result
+    return result
 endfunction
 
 command! -nargs=1 TideClassName call Translate_directory("<args>")
