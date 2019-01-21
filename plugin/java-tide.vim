@@ -163,7 +163,7 @@ function! SelectImport(tagidentifier)
     let tags = map(FilterTags(a:tagidentifier, g:max_import_tags, 0), 'v:val.tag')
     let tags = uniq(filter(tags, 'index(["c", "i", "e", "g"], v:val["kind"]) > -1'))
     let filenames = map(tags, 'v:val["filename"]')
-    let imports = uniq(sort(filter(map(filenames, 'Translate_directory(v:val)'), 'len(v:val)')))
+    let imports = uniq(filter(map(filenames, 'Translate_directory(v:val)'), 'len(v:val)'))
     if len(imports) == 1
         return imports[0]
     else
@@ -437,43 +437,6 @@ function! GetTagSignature(tag)
         return trim(join(signature, ''))
     endif
     return tag_line
-endfunction
-
-let partialTagCache = {}
-function! TideOmniFunction(findstart, base)
-    if has_key(g:partialTagCache, @%) == 0
-        let g:partialTagCache[@%] = {}
-    endif
-    if a:findstart
-        normal b
-        return col('.')-1
-    endif
-    let thisPartialMatchCache = g:partialTagCache[@%]
-    if has_key(thisPartialMatchCache, a:base)
-        return thisPartialMatchCache[a:base]
-    endif
-    " TODO: Pull out complete tags number into a config parameter.
-    let matchingtags = FilterTags(a:base, 50, 1)
-    let result = []
-    let already_seen_signatures = {}
-    for tagIndex in matchingtags
-        let tag = tagIndex.tag
-        " TODO: Pull out into a flag.
-        if tag.kind !=# "m"
-            continue
-        endif
-        " TODO: Pull out a flag that allows people to turn the signatures on and off.
-        let signature = GetTagSignature(tag)
-        if has_key(already_seen_signatures, signature)
-            continue
-        endif
-        let already_seen_signatures[signature] = 1
-        " TODO: Pull out a flag that allows you to turn off signature duplicates.
-        let matchingDictionary = {"word": signature, "menu": GetClassPackage(tag.filename), "info": TideDisplayTagInfo(tag, GetTagSignature(tag)), "dup": 1}
-        let result = add(result, matchingDictionary)
-    endfor
-    let thisPartialMatchCache[a:base] = result
-    return result
 endfunction
 
 command! -nargs=1 TideClassName call Translate_directory("<args>")

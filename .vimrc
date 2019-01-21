@@ -331,10 +331,6 @@ augroup java_include
     command! Classname :let @@ = Translate_directory(@%)
 augroup END
 
-augroup java_completion
-    au FileType java set omnifunc=TideOmniFunction
-augroup END
-
 " Make for java, using javac.
 augroup java_make
     autocmd!
@@ -385,12 +381,12 @@ augroup java_search
     " Allows me to jump to the start of a method definition in a class, since
     " all methods are indented 4 spaces in the Java projects I work on.
     " We also don't make use of package-private.
-    au FileType java nnoremap [[ ?^ \{4\}\(protected\\|private\\|public\)<CR>
-    au FileType java nnoremap ]] /^ \{4\}\(protected\\|private\\|public\)<CR>
-    au FileType java vnoremap [[ ?^ \{4\}\(protected\\|private\\|public\)<CR>
-    au FileType java vnoremap ]] /^ \{4\}\(protected\\|private\\|public\)<CR>
-    au FileType java onoremap [[ ?^ \{4\}\(protected\\|private\\|public\)<CR>
-    au FileType java onoremap ]] /^ \{4\}\(protected\\|private\\|public\)<CR>
+    au FileType java nnoremap [[ ?^ \{4\}\S<CR>
+    au FileType java nnoremap ]] /^ \{4\}\S<CR>
+    au FileType java vnoremap [[ ?^ \{4\}\S<CR>
+    au FileType java vnoremap ]] /^ \{4\}\S<CR>
+    au FileType java onoremap [[ ?^ \{4\}\S<CR>
+    au FileType java onoremap ]] /^ \{4\}\S<CR>
     au FileType java nnoremap [\ ?^ \{4\}}$?e<CR>
     au FileType java nnoremap ]\ /^ \{4\}}$/e<CR>
     au FileType java vnoremap [\ ?^ \{4\}}$?e<CR>
@@ -475,13 +471,15 @@ augroup END
 " where diffs are displayed using --word-diff=plain
 augroup git_review_diffs
     autocmd!
-    command! NextDiff call search("{+\\|[-")
-    command! PreviousDiff call search("{+\\|[-", "b")
+    command! NextDiff call search("^\\(+\\|-\\)")
+    command! PreviousDiff call search("^\\(+\\|-\\)", "b")
     " By using search, we can repeat searches for arbitrary
     " file patterns with `n`.
     command! -nargs=1 FindFile /^++.*<args>
-    command! NextFile call search("^++")
-    command! PreviousFile call search("^++", "b")
+    command! NextFile call search("^+++")
+    command! PreviousFile call search("^+++", "b")
+    command! NextComment call search("^{#")
+    command! PreviousComment call search("^{#", "b")
 
     au FileType diff nnoremap [[ :PreviousFile<CR>zt
     au FileType diff nnoremap ]] :NextFile<CR>zt
@@ -489,12 +487,18 @@ augroup git_review_diffs
     au FileType diff vnoremap ]] :NextFile<CR>zt
     au FileType diff onoremap [[ :PreviousFile<CR>zt
     au FileType diff onoremap ]] :NextFile<CR>zt
-    au FileType diff nnoremap <Leader>p :PreviousDiff<CR>
-    au FileType diff nnoremap <Leader>n :NextDiff<CR>
-    au FileType diff vnoremap <Leader>p :PreviousDiff<CR>
-    au FileType diff vnoremap <Leader>n :NextDiff<CR>
-    au FileType diff onoremap <Leader>p :PreviousDiff<CR>
-    au FileType diff onoremap <Leader>n :NextDiff<CR>
+    au FileType diff nnoremap <Leader>k :PreviousDiff<CR>
+    au FileType diff nnoremap <Leader>j :NextDiff<CR>
+    au FileType diff vnoremap <Leader>k :PreviousDiff<CR>
+    au FileType diff vnoremap <Leader>j :NextDiff<CR>
+    au FileType diff onoremap <Leader>k :PreviousDiff<CR>
+    au FileType diff onoremap <Leader>j :NextDiff<CR>
+    au FileType diff nnoremap <Leader>K :PreviousComment<CR>
+    au FileType diff nnoremap <Leader>J :NextComment<CR>
+    au FileType diff vnoremap <Leader>K :PreviousComment<CR>
+    au FileType diff vnoremap <Leader>J :NextComment<CR>
+    au FileType diff onoremap <Leader>K :PreviousComment<CR>
+    au FileType diff onoremap <Leader>J :NextComment<CR>
 augroup END
 
 " --- Quickfix ---
