@@ -32,9 +32,6 @@ if has('python3')
     silent! python3 1
 endif
 
-"Pathogen load
-call pathogen#infect()
-call pathogen#helptags()
 " I don't like it when a computer tries to do things for me, I'd rather have
 " custom mappings, like a mapping to duplicate the previous line's indent,
 " to handle indenting. Otherwise, I find myself fighting the computer.
@@ -71,11 +68,9 @@ nnoremap <Leader>/ //c
 set foldmethod=indent
 set path=.,,
 set incsearch
-set tags=./tags;~/tags
 set splitright
 " Disable all colors
 set t_Co=0
-set listchars=eol:¬,tab:>-,space:·
 " Use :set list! to toggle the nonprinting characters.
 set nolist
 
@@ -99,7 +94,6 @@ endfunction
 set laststatus=0
 command! ToggleStatusLine :call ToggleStatusLine()<CR>
 
-set statusline=%{fugitive#statusline()};
 set statusline+=%f:%l:%c;
 
 " Turn off that awful highlighting in the quickfix window
@@ -134,11 +128,15 @@ if filereadable("cscope.out")
 elseif $CSCOPE_DBS != ""
     cs add $CSCOPE_DBS
 endif
-set cscoperelative
+
+"Some systemwide vimrc settings set cst. I don't *want* to use cscope for tags.
+" For one thing, it opens an obnoxious dialogu box instead of just jumping to
+" a tag when :tag is used.
+set nocst
 
 " Putting cscope results in quickfix, which is much friendlier than whatever
 " it uses by default.
-set cscopequickfix=s-,c-,d-,i-,t-,e-,a-,g-
+set cscopequickfix=s-,c-,d-,i-,t-,e-
 
 " At the end of each of these mappings we jump back to the previous jump,
 " because cscope insists on jumping to the first match, and I don't want that.
@@ -213,14 +211,6 @@ augroup END
 " Disable tabs. The tabs that Macvim opens when I open a file in an already
 " running instance aren't really "tabs." Besides, I use buffers.
 autocmd BufWinEnter,BufNewFile * silent tabo
-
-" Terminal mode customizations
-" Provide a more intuitive, less awkward keymap for exiting terminal mode.
-tnoremap <Leader><Esc> <C-\><C-n>
-" The <Leader> key is because sometimes I open vim inside the terminal mode,
-" for things like interactive rebase. With this mapping, trying to navigate in
-" the inner vim with j won't kick me out of terminal mode.
-tnoremap <Leader>jj <C-\><C-n>
 
 " Remove the background colors when using vimdiff.
 highlight DiffAdd ctermbg=NONE ctermfg=NONE
@@ -310,8 +300,8 @@ augroup END
 
 function! Translate_javaclasspath()
     let classpath=".,,src/main/java,src/main/test,"
-    if filereadable(".raw-classpath")
-        let java_classpath = join(map(split(readfile(".raw-classpath")[0], ":"), 'fnamemodify(v:val, ":h") . "/tide-sources/"'), ",")
+    if filereadable(".classpath")
+        let java_classpath = join(map(readfile(".classpath"), 'fnamemodify(v:val, ":h") . "/tide-sources/"'), ",")
     else
         let java_classpath = ""
     endif
@@ -319,7 +309,7 @@ function! Translate_javaclasspath()
 endfunction
 
 augroup java_include
-    set tags=tags,~/tags
+    set tags=tags
     autocmd!
     au FileType java set include=^import\ \\zs.\\{-\\}\\ze;
     au FileType java execute "set path=".Translate_javaclasspath()

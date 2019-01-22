@@ -24,7 +24,7 @@
 " Returns a list containing two values: the group of imports in this buffer,
 " and the line at which the imports end.
 function! GetImportGroups()
-    let cursor_position = getcurpos()
+    let cursor_position = getpos(".")
     let class_start = search('^\(public\|protected\|private\) \(class\|enum\|interface\)', 'w')
     let class_docs_start = search('/\*\*', 'bWn')
     if class_docs_start > 0
@@ -194,7 +194,7 @@ endfunction
 " unused imports in the current module.
 function! TideFindUnusedImports()
     let unusedimports = []
-    let curpos = getcurpos()
+    let curpos = getpos(".")
     let importsEndingLineNumber = GetImportGroups()
     let imports = importsEndingLineNumber[0]
     let endingLineNumber = importsEndingLineNumber[1]
@@ -248,17 +248,17 @@ function! GetClassPackage(filename)
     let filepath = fnamemodify(a:filename, ":h")
     let fileclasspath = FindClassPathForFile(a:filename)
     let match_result = matchend(filepath, fileclasspath)
-    let package_path = filepath[match_result+1:]
+    let package_path = filepath[(match_result+1):]
     let tide_sources_end = matchend(package_path, "tide-sources/")
     if tide_sources_end > -1
-        let package_path = package_path[tide_sources_end:]
+        let package_path = package_path[(tide_sources_end):]
     else
         let test_code = matchend(filepath, "src/test/java/")
         if test_code > -1
-            let package_path = filepath[test_code:]
+            let package_path = filepath[(test_code):]
         else
             " TODO: Pull src/main/java out into a configuration parameter.
-            let package_path = filepath[matchend(a:filename, "src/main/java/"):]
+            let package_path = filepath[(matchend(a:filename, "src/main/java/")):]
         endif
     endif
     return substitute(package_path, "/", ".", "g")
@@ -274,9 +274,9 @@ let max_tags = 8
 " imports are put first.
 function! FilterTags(identifier, maxtags, partial)
     if a:partial
-        let tags = taglist("^" . a:identifier . "\\C", @%)
+        let tags = taglist("^" . a:identifier . "\\C")
     else
-        let tags = taglist("^" . a:identifier . "$", @%)
+        let tags = taglist("^" . a:identifier . "$")
     endif
     let infiletags = []
     let inscopetags = []
@@ -395,10 +395,14 @@ function! Tidetprevious(bang)
     execute tagIndex.tag.cmd
 endfunction
 
+function! Trim(input_string)
+    return substitute(a:input_string, '^\s*\(.\{-}\)\s*$', '\1', '')
+endfunction
+
 function! GetTagSignature(tag)
     " The line containing the tag without the
     " search pattern.
-    let tag_line = trim(a:tag.cmd[2:-3])
+    let tag_line = Trim(a:tag.cmd[2:-3])
     if a:tag.kind ==# "c" || a:tag.kind == "m"
         let lines = readfile(a:tag.filename)
         let found_tag = -1
@@ -407,9 +411,9 @@ function! GetTagSignature(tag)
             if found_tag >= 0
                 let signature_end = match(line, "{\\|;")
                 if signature_end > -1
-                    let signature = add(signature, trim(line[:signature_end-1]))
+                    let signature = add(signature, Trim(line[:signature_end-1]))
                 else
-                    let argument = trim(line)
+                    let argument = Trim(line)
                     if match(argument, ",$") > -1
                         let argument = argument . " "
                     endif
@@ -422,7 +426,7 @@ function! GetTagSignature(tag)
                 let found_tag = match(line, escape(tag_line, "*"). "$")
                 if found_tag > -1
                     let signature_start = match(line, a:tag.name)
-                    let trimmed_line = line[signature_start:]
+                    let trimmed_line = line[(signature_start):]
                     let signature_end = match(trimmed_line, "{\\|;")
                     if signature_end > -1
                         let trimmed_line = trimmed_line[:signature_end-1]
@@ -434,7 +438,7 @@ function! GetTagSignature(tag)
                 endif
             endif
         endfor
-        return trim(join(signature, ''))
+        return Trim(join(signature, ''))
     endif
     return tag_line
 endfunction
