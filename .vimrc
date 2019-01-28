@@ -440,11 +440,19 @@ augroup END
 augroup lua_make
     autocmd!
     au FileType lua setmakeprg=lua\ %
-    au FileType lua seterrorformat=lua:\ %f:%l:\ %m
+    au FileType lua set errorformat=lua:\ %f:%l:\ %m
 augroup END
 
 augroup lua_overview
     au FileType lua command! Outline :call Outline("^\(M\|local\|function\)")
+augroup END
+
+" --- Ocaml ---
+augroup ocaml_make
+    autocmd!
+    au FileType ocaml set makeprg=ocamlopt\ %
+    au FileType ocaml set errorformat=%EFile\ \"%f\"\\,\ line\ %l\\,\ characters\ %c-%*\\d:,%CError:\ %m,%Z%m
+",+C%Error:\ %m,%Z%m
 augroup END
 
 " --- Markdown ---
