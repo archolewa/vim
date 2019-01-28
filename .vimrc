@@ -62,6 +62,8 @@ set shiftround
 set nofoldenable
 colorscheme desert
 highlight ColorColumn ctermbg=8
+set shortmess=atTWAI
+set cmdheight=2
 
 " Run a case insensitive search. By default, run case sensitive searches
 nnoremap <Leader>/ //c
@@ -70,7 +72,7 @@ set path=.,,
 set incsearch
 set splitright
 " Disable all colors
-set t_Co=0
+" set t_Co=0
 " Use :set list! to toggle the nonprinting characters.
 set nolist
 
@@ -110,24 +112,15 @@ let mapleader = ";"
 set title
 
 " Wrapping!
-nnoremap <Leader>w :ArgWrap<CR>
+nnoremap <Leader>w vi):s/,/,\r/g<CR>])i<CR><Esc>[(a<CR><Esc>vi)
 
-" Search, but don't jump to the first result.
-nnoremap <Leader>s :Ack!<Space>
-" Search in current file (d is between s and f on 
+" Search in current file (d is between s and f on
 " my keyboard, i.e. 'search file'.
 nnoremap <Leader>d :vimgrep <C-r>%<C-f><Esc>F<Space>a
 
 " ------- Code exploration ----------
 
 " Cscope settings. Cscope lets us search for usages of a particular identifier.
-
-" Use this directory's cscope database, or the global database otherwise.
-if filereadable("cscope.out")
-    cs add cscope.out
-elseif $CSCOPE_DBS != ""
-    cs add $CSCOPE_DBS
-endif
 
 "Some systemwide vimrc settings set cst. I don't *want* to use cscope for tags.
 " For one thing, it opens an obnoxious dialogu box instead of just jumping to
@@ -150,6 +143,12 @@ nnoremap <Leader>b :cs find s <C-R>=expand("<cword>")<CR><CR>:copen<CR><c-w>k<c-
 nnoremap g] :ltag <C-R><C-W><CR>:lopen<CR><c-w>k<c-o><c-w>j
 
 nnoremap <c-y> :tnext<cr>
+
+" ----------- Grepping -------------------
+set grepprg=grep\ -n\ --exclude=tags\ --exclude=cscope.*\ --exclude=.classpath\ --exclude=.raw-classpath\ --exclude-dir=target\ --exclude-dir=.git\ $*
+" Don't print the output to the terminal screen. If I want that, I'll run it
+" directly! This applies to both grep and make.
+set shellpipe=&>
 
 " ---------- Buffer management -----------
 " Close current window, without actually closing the buffer. This gives me the
@@ -176,7 +175,7 @@ command! CopyFilename let @+ = expand("%")
 " ------ Line diffs ------
 "
 " This allows me to quickly open a diff of two particular lines. *Very* useful
-" when looking at test failure outputs for complex data structures. 
+" when looking at test failure outputs for complex data structures.
 vnoremap <Leader>ld :'<,'>Linediff<CR>
 nnoremap <Leader>le :LinediffReset<CR>
 
@@ -189,10 +188,6 @@ command! Trim call TrimWhiteSpace()
 
 " Should start using this instead of Caps Lock as escape, much more portable.
 inoremap jj <Esc>
-
-" Colors are my nemesis!
-let g:ackprg = 'ag --vimgrep --nocolor --word-regexp'
-let g:ack_autofold_results = 1
 
 " Prompt for whether to create any directories that don't exist when saving,
 " or use w! to just do it.
@@ -207,10 +202,6 @@ augroup vimrc-auto-mkdir
     endif
   endfunction
 augroup END
-
-" Disable tabs. The tabs that Macvim opens when I open a file in an already
-" running instance aren't really "tabs." Besides, I use buffers.
-autocmd BufWinEnter,BufNewFile * silent tabo
 
 " Remove the background colors when using vimdiff.
 highlight DiffAdd ctermbg=NONE ctermfg=NONE
@@ -278,12 +269,12 @@ augroup dash
     au FileType yaml iabbrev -- &mdash
 augroup END
 
-" -------- Formatting -------- 
+" -------- Formatting --------
 set nocindent
 " Lets me find lines that are too long, without having to rely on colorcolumn.
 command! LongLines /^.\{80\}
 
-" ----- Java ----- 
+" ----- Java -----
 
 " Ask the user for which class to import, and appends the import to the import
 " list. The next step is to put it in the correct spot alphabetically.
@@ -299,9 +290,9 @@ augroup java_format
 augroup END
 
 function! Translate_javaclasspath()
-    let classpath=".,,src/main/java,src/main/test,"
+    let classpath=".,,src/main/java,src/main/test," . fnamemodify("~/tide-sources/", ":p") . ","
     if filereadable(".classpath")
-        let java_classpath = join(map(readfile(".classpath"), 'fnamemodify(v:val, ":h") . "/tide-sources/"'), ",")
+        let java_classpath = join(map(readfile(".classpath"), 'fnamemodify(v:val, ":p:h") . "/tide-sources/"'), ",")
     else
         let java_classpath = ""
     endif
@@ -315,7 +306,7 @@ augroup java_include
     au FileType java execute "set path=".Translate_javaclasspath()
     " Enable gf on import statements.  Convert . in the package
     " name to / and append .java to the name, then search the path.
-    " Also allows using [i, but that's *way* too slow. 
+    " Also allows using [i, but that's *way* too slow.
     au FileType java set includeexpr=substitute(v:fname,'\\.','/','g')
     au FileType java set suffixesadd=.java
     command! Classname :let @@ = Translate_directory(@%)
@@ -348,20 +339,21 @@ augroup java_generate
     " So the line:
     " foo(int x)
     " becomes
-    " int x = 
+    " int x =
     " foo(x)
     command! ExtractVariable :normal 2yw"_dw0"ay^O<Esc>"app
     nnoremap <Leader>v :ExtractVariable<CR>
 augroup END
 
+function! Children(className, directory)
+    execute 'grep -r --include=*.java "\\(extends\\|implements\\) ' . a:className . '"' . a:directory
+endfunction
 augroup java_search
     autocmd!
-    " Find classes that implement this interface.
-    command! -nargs=1 Implementors :Ack! --java "implements .*<args>"
-    " Find classes that extend this class (i.e. subclasses).
-    command! -nargs=1 Children :Ack! --java "extends <args>"
+    " Find classes that extend this class or implement this interface.
+    command! -nargs=+ Children :call Children(<f-args>)
     " Find the class definition of the identifier under the cursor.
-    command! -nargs=1 ClassDef :Ack! --java "class <args>"
+    command! -nargs=+ ClassDef :grep -r --include=*.java "class <args>" <args>
     " Jump to parent or interface
     command! ParentIdentifier execute "/\\(\\<extends\\>\\|\\<implements\\>\\) \\S*" | normal nW
     " Jump to class declaration. The class declaration starts at the access modifier
@@ -454,9 +446,9 @@ augroup markdown_overview
     autocmd!
     " Outline returns all the headings in the file.
     au FileType markdown command! Outline :call Outline("^#")
-augroup END 
+augroup END
 
-" --- Git Review Diffs -- 
+" --- Git Review Diffs --
 " Defines a collection of commands for navigating git diffs,
 " where diffs are displayed using --word-diff=plain
 augroup git_review_diffs
@@ -492,13 +484,13 @@ augroup git_review_diffs
 augroup END
 
 " --- Quickfix ---
-" This manages autocommands for keeping the quickfix tame. 
-" I rely heavily on searching, tags, and cscope. However 
+" This manages autocommands for keeping the quickfix tame.
+" I rely heavily on searching, tags, and cscope. However
 " all of those display file names and locations. Most of the
 " time I don't care about that (though I do want Vim to know
-" about them for easy jumping), so that is just noise. 
+" about them for easy jumping), so that is just noise.
 " This sets up my quickfix
-" to hide filenames and locations except for when I 
+" to hide filenames and locations except for when I
 " explicitly ask for them.
 augroup quickfix_file_names
     autocmd!

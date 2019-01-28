@@ -69,7 +69,7 @@ function! Import(tagidentifier)
         return
     endif
     if search(import_statement, 'wn')
-        echom("Import " . chosen_import . " already exists.")
+        echom("\nImport " . chosen_import . " already exists.")
         return
     endif
     let [import_groups, imports_end] = GetImportGroups()
@@ -82,9 +82,11 @@ function! Import(tagidentifier)
         call add(import_statements, '')
     endfor
     let package_location = search("^package", 'wn')
-    call deletebufline("%", package_location+1, imports_end-1)
+    let curpos = getcurpos()
+    execute "silent " . string(package_location+1) . "," . string(imports_end-1) . "delete"
     call append(package_location, import_statements)
     let @/ = original_search
+    call setpos(".", curpos)
 endfunction
 
 " Takes a list of lists, and a list of strings. Each entry in import_groups
@@ -215,7 +217,9 @@ function! TideFindUnusedImports()
         let qflist = add(qflist, {"pattern": search_pattern, "filename":expand("%")})
     endfor
     call setqflist(qflist)
-    call setpos('.', curpos)
+    if len(qflist) > 0 
+        execute "cc"
+    endif
 endfunction!
 
 
@@ -319,7 +323,7 @@ function! FilterTags(identifier, maxtags, partial)
 endfunction
 
 function! JumpToTag(tag, bang, identifier)
-    execute a:tag.taglistindex . "tag" . a:bang . " " . a:identifier
+    execute "silent " . a:tag.taglistindex . "tag" . a:bang . " " . a:identifier
 endfunction
 
 " This is used to store the last set of filtered tags
