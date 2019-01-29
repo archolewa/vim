@@ -408,7 +408,13 @@ function! GetTagSignature(tag)
     " search pattern.
     let tag_line = Trim(a:tag.cmd[2:-3])
     if a:tag.kind ==# "c" || a:tag.kind == "m"
-        let lines = readfile(a:tag.filename)
+        let originalquickfix = getqflist()
+        let command = "grep -h -A20 " . '"' . tag_line .'" ' . a:tag.filename
+        let lines = []
+        for entry in split(system(command), "\n")
+            let lines = add(lines, entry)
+        endfor
+        call setqflist(originalquickfix)
         let found_tag = -1
         let signature = []
         for line in lines
@@ -445,6 +451,29 @@ function! GetTagSignature(tag)
         return Trim(join(signature, ''))
     endif
     return tag_line
+endfunction
+
+function! TideOmniFunction(findstart, base)
+    if a:findstart
+        normal b
+        return col('.')-1
+    endif
+    " TODO: Pull out complete tags number into a config parameter.
+    let matchingtags = FilterTags(a:base, 5, 1)
+    let result = []
+    let already_seen_signatures = {}
+    for tagIndex in matchingtags
+        let tag = tagIndex.tag
+        if tag.kind ==# "m"
+            let signature = GetTagSignature(tag)
+        else 
+            let signature = tag.name
+        endif
+        " TODO: Pull out a flag that allows you to turn off signature duplicates.
+        let matchingDictionary = {"word": signature}
+        let result = add(result, matchingDictionary)
+    endfor
+    return result
 endfunction
 
 command! -nargs=1 TideClassName call Translate_directory("<args>")

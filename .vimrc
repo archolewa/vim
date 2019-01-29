@@ -123,9 +123,11 @@ nnoremap <Leader>d :vimgrep <C-r>%<C-f><Esc>F<Space>a
 " Cscope settings. Cscope lets us search for usages of a particular identifier.
 
 "Some systemwide vimrc settings set cst. I don't *want* to use cscope for tags.
-" For one thing, it opens an obnoxious dialogu box instead of just jumping to
+" For one thing, it opens an obnoxious dialogue box instead of just jumping to
 " a tag when :tag is used.
 set nocst
+" Tells vim to build absolute paths from cscope's relative paths.
+set cscoperelative
 
 " Putting cscope results in quickfix, which is much friendlier than whatever
 " it uses by default.
