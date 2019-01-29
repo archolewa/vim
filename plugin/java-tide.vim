@@ -459,7 +459,7 @@ function! TideOmniFunction(findstart, base)
         return col('.')-1
     endif
     " TODO: Pull out complete tags number into a config parameter.
-    let matchingtags = FilterTags(a:base, 5, 1)
+    let matchingtags = FilterTags(a:base, 10, 1)
     let result = []
     let already_seen_signatures = {}
     for tagIndex in matchingtags

@@ -312,6 +312,7 @@ augroup java_include
     au FileType java set includeexpr=substitute(v:fname,'\\.','/','g')
     au FileType java set suffixesadd=.java
     command! Classname :let @@ = Translate_directory(@%)
+    au FileType java set omnifunc=TideOmniFunction
 augroup END
 
 " Make for java, using javac.
