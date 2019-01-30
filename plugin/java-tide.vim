@@ -65,11 +65,11 @@ function! Import(tagidentifier)
     let import_statement = "import " . chosen_import . ";"
     let original_search = @/
     if match(import_statement, "^import java.lang") > -1
-        echom("Not adding redundant java.lang import.")
+        echo("\nNot adding redundant java.lang import.")
         return
     endif
     if search(import_statement, 'wn')
-        echom("\nImport " . chosen_import . " already exists.")
+        echo("\nImport " . chosen_import . " already exists.")
         return
     endif
     let [import_groups, imports_end] = GetImportGroups()
@@ -101,7 +101,7 @@ function! ExtractGroup(import_groups, packages)
             return group
         endif
     endfor
-    echom("ERROR: Unknown group " . string(a:packages))
+    echo("ERROR: Unknown group " . string(a:packages))
 endfunction
 
 " Given a list of import groups, the import to add, and the statement for
@@ -247,8 +247,12 @@ function! FindClassPathForFile(filename)
     endif
 endfunction
 
+let package_cache = {}
 " Given a filename, returns the package for the Java class in said file.
 function! GetClassPackage(filename)
+    if has_key(g:package_cache, a:filename) 
+        return g:package_cache[a:filename]
+    endif
     let filepath = fnamemodify(a:filename, ":h")
     let fileclasspath = FindClassPathForFile(a:filename)
     let match_result = matchend(filepath, fileclasspath)
@@ -265,10 +269,11 @@ function! GetClassPackage(filename)
             let package_path = filepath[(matchend(a:filename, "src/main/java/")):]
         endif
     endif
-    return substitute(package_path, "/", ".", "g")
+    let package = substitute(package_path, "/", ".", "g")
+    let g:package_cache[a:filename] = package
+    return package
 endfunction
 
-" TODO: Pull out into a configuration parameter.
 let max_tags = 8
 " Given an identifier, returns a list of dictionaries containing two entries:
 " 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
@@ -276,7 +281,10 @@ let max_tags = 8
 " `taglistindex`tag to immediately jump to this tag and add it to the tagstack.
 " The list is partially sorted, so that tags that appear in the current package and
 " imports are put first.
-function! FilterTags(identifier, maxtags, partial)
+" Also takes the maximum number of tags to return, and whether or not to perform a partial
+" match, and whether to include only those tags that are in immediate scope (i.e. this file
+" and direct imports).
+function! FilterTagsScope(identifier, maxtags, partial, scope)
     if a:partial
         let tags = taglist("^" . a:identifier . "\\C")
     else
@@ -287,7 +295,8 @@ function! FilterTags(identifier, maxtags, partial)
     let filteredtags = []
     let thisprojecttags = []
     let javalangtags = []
-    let importsmap = {GetClassPackage(expand("%")):1}
+    let thisfilepackage = GetClassPackage(expand("%"))
+    let importsmap = {(thisfilepackage):1}
     for group in GetImportGroups()[0]
         for import in group
             let package = split(split(import)[1], ';')[0]
@@ -297,9 +306,6 @@ function! FilterTags(identifier, maxtags, partial)
     let index = 0
     let tagcount = 0
     for tag in tags
-        if tagcount >= a:maxtags
-            break
-        endif
         let index = index + 1
         let tagAndIndex = {"tag": tag, "taglistindex": index}
         if match(tag.filename, @%) > -1
@@ -318,12 +324,28 @@ function! FilterTags(identifier, maxtags, partial)
     endfor
     let result = extend(infiletags, inscopetags)
     let result = extend(result, javalangtags)
-    let result = extend(result, thisprojecttags)
-    return extend(result, filteredtags)[:a:maxtags-1]
+    if !a:scope && tagcount < a:maxtags 
+        let result = extend(result, thisprojecttags)
+        let result = extend(result, filteredtags)[:a:maxtags-1]
+    endif
+    return result
+endfunction
+
+" TODO: Pull out into a configuration parameter.
+" Given an identifier, returns a list of dictionaries containing two entries:
+" 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
+" 2. taglistindex - The tag's original index in the taglist. This allows us to use
+" `taglistindex`tag to immediately jump to this tag and add it to the tagstack.
+" The list is partially sorted, so that tags that appear in the current package and
+" imports are put first.
+" Also takes the maximum number of tags to return, and whether or not to perform a partial
+" match.
+function! FilterTags(identifier, maxtags, partial)
+    return FilterTagsScope(a:identifier, a:maxtags, a:partial, 0)
 endfunction
 
 function! JumpToTag(tag, bang, identifier)
-    execute "silent " . a:tag.taglistindex . "tag" . a:bang . " " . a:identifier
+    execute "silent " . (a:tag.taglistindex) . "tag" . a:bang . " " . a:identifier
 endfunction
 
 " This is used to store the last set of filtered tags
@@ -332,9 +354,9 @@ endfunction
 let lastTags = []
 let lastTagsIndex = -1
 function! TideJumpTag(identifier, count, bang)
-    let g:lastTags = FilterTags(a:identifier, g:max_tags, 0)
+    let g:lastTags = FilterTagsScope(a:identifier, g:max_tags, 0, 1)
     if len(g:lastTags) == 0
-        echom("No tags found.")
+        echo("No tags found.")
         return
     endif
     let g:lastTagsIndex = min([a:count, len(g:lastTags) - 1])
@@ -354,10 +376,10 @@ function! TideDisplayTagInfo(tag, signature)
 endfunction
 
 function! TideTselect(identifier, bang)
-    let g:lastTags = FilterTags(a:identifier, g:max_tags, 0)
+    let g:lastTags = FilterTagsScope(a:identifier, g:max_tags, 0, 1)
     let g:lastTagsIndex = 0
     if len(g:lastTags) == 0
-        echom("No tags found.")
+        echo("No tags found.")
         return
     endif
     " TODO: Pull this out into a configuration parameter.
@@ -375,7 +397,7 @@ endfunction
 
 function! Tidetnext(bang)
     if (g:lastTagsIndex >= len(g:lastTags) - 1)
-        echom("Reached end of tags.")
+        echo("Reached end of tags.")
         return
     endif
     let g:lastTagsIndex += 1
@@ -388,7 +410,7 @@ endfunction
 
 function! Tidetprevious(bang)
     if (g:lastTagsIndex <= 0)
-        echom("Reached start of tags.")
+        echo("Reached start of tags.")
         return
     endif
     let g:lastTagsIndex -= 1
@@ -409,16 +431,24 @@ function! GetTagSignature(tag)
     let tag_line = Trim(a:tag.cmd[2:-3])
     if a:tag.kind ==# "c" || a:tag.kind == "m"
         let originalquickfix = getqflist()
+        "TODO: Make configurable.
         let command = "grep -h -A20 " . '"' . tag_line .'" ' . a:tag.filename
         let lines = []
         for entry in split(system(command), "\n")
             let lines = add(lines, entry)
         endfor
         call setqflist(originalquickfix)
-        let found_tag = -1
         let signature = []
-        for line in lines
-            if found_tag >= 0
+        let line = lines[0]
+        let signature_start = match(line, a:tag.name)
+        let trimmed_line = line[(signature_start):]
+        let signature_end = match(trimmed_line, "{\\|;")
+        if signature_end > -1
+            let trimmed_line = trimmed_line[:signature_end-1]
+        endif
+        let signature = add(signature, trimmed_line)
+        if signature_end == -1
+            for line in lines[1:]
                 let signature_end = match(line, "{\\|;")
                 if signature_end > -1
                     let signature = add(signature, Trim(line[:signature_end-1]))
@@ -432,25 +462,21 @@ function! GetTagSignature(tag)
                 if signature_end > -1
                     break
                 endif
-            else
-                let found_tag = match(line, escape(tag_line, "*"). "$")
-                if found_tag > -1
-                    let signature_start = match(line, a:tag.name)
-                    let trimmed_line = line[(signature_start):]
-                    let signature_end = match(trimmed_line, "{\\|;")
-                    if signature_end > -1
-                        let trimmed_line = trimmed_line[:signature_end-1]
-                    endif
-                    let signature = add(signature, trimmed_line)
-                    if signature_end > -1
-                        break
-                    endif
-                endif
-            endif
-        endfor
-        return Trim(join(signature, ''))
+            endfor
+        endif
+        return substitute(Trim(join(signature, '')), "", "", "")
     endif
     return tag_line
+endfunction
+
+let tags_cache = {}
+
+function! ClearTagsCache(filename) 
+    let g:tags_cache[a:filename] = {}
+endfunction
+
+function! WipeTagsCache() 
+    let g:tags_cache = {}
 endfunction
 
 function! TideOmniFunction(findstart, base)
@@ -458,10 +484,22 @@ function! TideOmniFunction(findstart, base)
         normal b
         return col('.')-1
     endif
+    let filename = expand("%")
     " TODO: Pull out complete tags number into a config parameter.
-    let matchingtags = FilterTags(a:base, 10, 1)
-    let result = []
-    let already_seen_signatures = {}
+    if has_key(g:tags_cache, filename)
+        let cache = g:tags_cache[filename]
+        if has_key(cache, a:base)
+            let matchingtags = cache[a:base]
+        else
+            let matchingtags = FilterTagsScope(a:base, 40, 1, 1)
+            let cache[a:base] = matchingtags
+        endif
+    else
+        let cache = {}
+        let matchingtags = FilterTagsScope(a:base, 40, 1, 1)
+        let cache[a:base] = matchingtags
+        let g:tags_cache[filename] = cache
+    endif
     for tagIndex in matchingtags
         let tag = tagIndex.tag
         if tag.kind ==# "m"
@@ -469,11 +507,12 @@ function! TideOmniFunction(findstart, base)
         else 
             let signature = tag.name
         endif
-        " TODO: Pull out a flag that allows you to turn off signature duplicates.
-        let matchingDictionary = {"word": signature}
-        let result = add(result, matchingDictionary)
+        call complete_add({"word": signature})
+        if complete_check()
+            break
+        endif
     endfor
-    return result
+    return []
 endfunction
 
 command! -nargs=1 TideClassName call Translate_directory("<args>")
