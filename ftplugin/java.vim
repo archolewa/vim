@@ -4,7 +4,7 @@ augroup java_format
     autocmd!
     " Allows me to easily find lines that are too long without having to
     " rely on checkstyle, or an obnoxious colored column.
-     command! LongLines /^.\{120\}
+    command! LongLines /^.\{120\}
     au BufWritePre * TideUnusedImports
 augroup END
 

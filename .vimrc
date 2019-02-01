@@ -181,14 +181,15 @@ nnoremap <Leader>le :LinediffReset<CR>
 
 " Remove all trailing spaces
 function! TrimWhiteSpace()
-    %s/\s*$//
-    ''
+    let pos = getpos(".")
+    %s/\s\+$//e
+    call setpos(".", pos)
 endfunction
 command! Trim call TrimWhiteSpace()
 
-augroup trim-whitespace
+augroup trim
     autocmd!
-    autocmd BufWritePre * call TrimWhiteSpace()
+    au BufWritePre * Trim
 augroup END
 
 " Should start using this instead of Caps Lock as escape, much more portable.
@@ -320,6 +321,5 @@ source ~/.vim/private.vim
 
 " Display the current file name.
 nnoremap <space>f :echom @%<CR>
-
 
 command! -nargs=1 InsertPath r!find ~/ -name <args>
