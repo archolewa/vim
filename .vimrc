@@ -37,6 +37,7 @@ endif
 " to handle indenting. Otherwise, I find myself fighting the computer.
 filetype indent plugin off
 filetype on
+filetype plugin on
 " I find syntax highlighting to be unnecessary visual stimulation. I don't
 " know that syntax highlighting really contributes much.
 syntax off
