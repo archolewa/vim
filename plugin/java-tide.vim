@@ -110,7 +110,7 @@ endfunction
 " position.
 function! AddNewImport(import_groups, chosen_import, import_statement)
     " TODO: Pull this out into a user-settable global variable.
-    let group_ordering = ["com.flurry", "com.yahoo", "com", "org", "net", "edu", "io", "gnu", "lombok", "java", "javax"]
+    let group_ordering = ["com.flurry", "com.yahoo", "com", "org", "net", "spock", "edu", "io", "gnu", "lombok", "java", "javax"]
     let group_ordering = map(group_ordering, 'split(v:val, "\\.")')
     let packages = split(a:chosen_import, '\.')
     let new_import_group = ExtractGroup(group_ordering, packages)
@@ -469,37 +469,13 @@ function! GetTagSignature(tag)
     return tag_line
 endfunction
 
-let tags_cache = {}
-
-function! ClearTagsCache(filename) 
-    let g:tags_cache[a:filename] = {}
-endfunction
-
-function! WipeTagsCache() 
-    let g:tags_cache = {}
-endfunction
-
 function! TideOmniFunction(findstart, base)
     if a:findstart
         normal b
         return col('.')-1
     endif
     let filename = expand("%")
-    " TODO: Pull out complete tags number into a config parameter.
-    if has_key(g:tags_cache, filename)
-        let cache = g:tags_cache[filename]
-        if has_key(cache, a:base)
-            let matchingtags = cache[a:base]
-        else
-            let matchingtags = FilterTagsScope(a:base, 40, 1, 1)
-            let cache[a:base] = matchingtags
-        endif
-    else
-        let cache = {}
-        let matchingtags = FilterTagsScope(a:base, 40, 1, 1)
-        let cache[a:base] = matchingtags
-        let g:tags_cache[filename] = cache
-    endif
+    let matchingtags = FilterTagsScope(a:base, 40, 1, 1)    
     for tagIndex in matchingtags
         let tag = tagIndex.tag
         if tag.kind ==# "m"

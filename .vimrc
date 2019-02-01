@@ -56,8 +56,6 @@ set list
 set expandtab
 set shiftwidth=4
 set tabstop=4
-autocmd FileType javascript setlocal tabstop=2
-autocmd FileType javascript setlocal shiftwidth=2
 set shiftround
 set nofoldenable
 colorscheme desert
@@ -81,7 +79,7 @@ set nolist
 " through them anyway, might as well cycle through them.
 set completeopt=
 set pumheight=1
-set complete=.,w,b
+set complete=.
 
 function! ToggleStatusLine()
     if (&laststatus == 2)
@@ -188,6 +186,11 @@ function! TrimWhiteSpace()
 endfunction
 command! Trim call TrimWhiteSpace()
 
+augroup trim-whitespace
+    autocmd!
+    autocmd BufWritePre * call TrimWhiteSpace()
+augroup END
+
 " Should start using this instead of Caps Lock as escape, much more portable.
 inoremap jj <Esc>
 
@@ -276,125 +279,6 @@ set nocindent
 " Lets me find lines that are too long, without having to rely on colorcolumn.
 command! LongLines /^.\{80\}
 
-" ----- Java -----
-
-" Ask the user for which class to import, and appends the import to the import
-" list. The next step is to put it in the correct spot alphabetically.
-nnoremap <Leader>ai :TideImport <C-R><C-W><CR>
-
-" Contains java specific commands that are useful for following formatting
-" rules.
-augroup java_format
-    autocmd!
-    " Allows me to easily find lines that are too long without having to
-    " rely on checkstyle, or an obnoxious colored column.
-    au FileType java command! LongLines /^.\{120\}
-augroup END
-
-function! Translate_javaclasspath()
-    let classpath=".,,src/main/java,src/main/test," . fnamemodify("~/tide-sources/", ":p") . ","
-    if filereadable(".classpath")
-        let java_classpath = join(map(readfile(".classpath"), 'fnamemodify(v:val, ":p:h") . "/tide-sources/"'), ",")
-    else
-        let java_classpath = ""
-    endif
-    return classpath . java_classpath
-endfunction
-
-augroup java_include
-    set tags=tags
-    autocmd!
-    au FileType java set include=^import\ \\zs.\\{-\\}\\ze;
-    au FileType java execute "set path=".Translate_javaclasspath()
-    " Enable gf on import statements.  Convert . in the package
-    " name to / and append .java to the name, then search the path.
-    " Also allows using [i, but that's *way* too slow.
-    au FileType java set includeexpr=substitute(v:fname,'\\.','/','g')
-    au FileType java set suffixesadd=.java
-    command! Classname :let @@ = Translate_directory(@%)
-    au FileType java set omnifunc=TideOmniFunction
-augroup END
-
-" Make for java, using javac.
-augroup java_make
-    autocmd!
-    " Just use make. Without any of these fancy neomake plugins or what-not.
-    au FileType java set makeprg=javac\ -g:none\ -nowarn\ -classpath\ `cat\ .raw-classpath`\ -d\ /tmp\ `find\ .\ -name\ *.java`
-    au FileType java set errorformat=%E%f:%l:\ %m,%-Z%p^,%+C%.%#
-    " Copy just the part of the filename used in maven's test plugin to the
-    " clipboard. This is useful for running my java-debug.sh script to start a
-    " debugging session with this test.
-    au FileType java command! CopyTestFilename let @+ = expand("%:t:r")
-augroup END
-
-" Defines a collection of commands for making common patterns in Java easier.
-augroup java_generate
-    autocmd!
-    function! GetClassname()
-        let c = @c
-        let @c = expand("%:t:r")
-        normal "cp
-        let @c = c
-    endfunction
-    command! Classname :call GetClassname()
-    " Extracts a variable out of a function signature and creates
-    " a local variable of the same type and name.
-    " So the line:
-    " foo(int x)
-    " becomes
-    " int x =
-    " foo(x)
-    command! ExtractVariable :normal 2yw"_dw0"ay^O<Esc>"app
-    nnoremap <Leader>v :ExtractVariable<CR>
-augroup END
-
-function! Children(className, directory)
-    execute 'grep -r --include=*.java "\\(extends\\|implements\\) ' . a:className . '"' . a:directory
-endfunction
-augroup java_search
-    autocmd!
-    " Find classes that extend this class or implement this interface.
-    command! -nargs=+ Children :call Children(<f-args>)
-    " Find the class definition of the identifier under the cursor.
-    command! -nargs=+ ClassDef :grep -r --include=*.java "class <args>" <args>
-    " Jump to parent or interface
-    command! ParentIdentifier execute "/\\(\\<extends\\>\\|\\<implements\\>\\) \\S*" | normal nW
-    " Jump to class declaration. The class declaration starts at the access modifier
-    " that's"^/s*public fully indented to the left.
-    command! ClassDeclaration execute "?^\\(public\\|private\\|protected\\|class\\)" | normal n2W
-
-    " Allows me to jump to the start of a method definition in a class, since
-    " all methods are indented 4 spaces in the Java projects I work on.
-    " We also don't make use of package-private.
-    au FileType java nnoremap [[ ?^ \{4\}\S<CR>
-    au FileType java nnoremap ]] /^ \{4\}\S<CR>
-    au FileType java vnoremap [[ ?^ \{4\}\S<CR>
-    au FileType java vnoremap ]] /^ \{4\}\S<CR>
-    au FileType java onoremap [[ ?^ \{4\}\S<CR>
-    au FileType java onoremap ]] /^ \{4\}\S<CR>
-    au FileType java nnoremap [\ ?^ \{4\}}$?e<CR>
-    au FileType java nnoremap ]\ /^ \{4\}}$/e<CR>
-    au FileType java vnoremap [\ ?^ \{4\}}$?e<CR>
-    au FileType java vnoremap ]\ /^ \{4\}}$/e<CR>
-    au FileType java onoremap [\ ?^ \{4\}}$?e<CR>
-    au FileType java onoremap ]\ /^ \{4\}}$/e<CR>
-
-    " Allows me to customize gd to understand Java functions.
-    au FileType java nmap gd "syiw<CR>[[ /<C-R>s<CR>
-augroup END
-
-augroup java_tags
-    autocmd!
-    " Allows me to jump to the start of a method definition in a class, since
-    " all methods are indented 4 spaces in the Java projects I work on.
-    " We also don't make use of package-private.
-    au FileType java nnoremap <C-\> :Tidetag <C-R><C-W><cr>
-    au FileType java nnoremap g\ :Tidetselect <C-R><C-W><cr>
-    au FileType java nnoremap g<C-\> :Tidetlist<CR>
-    au FileType java nnoremap <C-n> :Tidetnext<CR>
-    au FileType java nnoremap <C-p> :Tidetprevious<CR>
-augroup END
-
 augroup avdl_search
     autocmd!
     au FileType avdl nnoremap [[ ?^  record<CR>
@@ -403,95 +287,6 @@ augroup avdl_search
     au FileType avdl vnoremap ]] /^  record<CR>
     au FileType avdl onoremap [[ ?^  record<CR>
     au FileType avdl onoremap ]] /^  record<CR>
-augroup END
-
-" A function for finding the 'outline' of a file, whatever that means.
-" We get the outline by performing a search of the specified pattern, and then
-" opening the quickfix window.
-function! Outline(pattern)
-    execute 'vimgrep ' . '"' . a:pattern . '" '. expand("%")
-    execute 'copen'
-endfunction
-
-augroup java_overview
-    autocmd!
-    " Display a list of public methods/members.
-    au FileType java command! Outline :call Outline("^\\s*public")
-augroup END
-
-
-" --- Lua ---
-" Make for Lua. This works by just executing Lua with the current file.
-augroup lua_make
-    autocmd!
-    au FileType lua setmakeprg=lua\ %
-    au FileType lua set errorformat=lua:\ %f:%l:\ %m
-augroup END
-
-augroup lua_overview
-    au FileType lua command! Outline :call Outline("^\(M\|local\|function\)")
-augroup END
-
-" --- Ocaml ---
-augroup ocaml_make
-    autocmd!
-    au FileType ocaml set makeprg=ocamlopt\ %
-    au FileType ocaml set errorformat=%EFile\ \"%f\"\\,\ line\ %l\\,\ characters\ %c-%*\\d:,%CError:\ %m,%Z%m
-",+C%Error:\ %m,%Z%m
-augroup END
-
-" --- Markdown ---
-augroup markdown_search
-    autocmd!
-    " Allows me to co-opt the `[[`, `]]` movements to jump between Markdown
-    " headings.
-    au FileType markdown nnoremap [[ ?^#<CR>
-    au FileType markdown nnoremap ]] /^#<CR>
-    au FileType markdown vnoremap [[ ?^#<CR>
-    au FileType markdown vnoremap ]] /^#<CR>
-    au FileType markdown onoremap [[ ?^#<CR>
-    au FileType markdown onoremap ]] /^#<CR>
-augroup END
-
-augroup markdown_overview
-    autocmd!
-    " Outline returns all the headings in the file.
-    au FileType markdown command! Outline :call Outline("^#")
-augroup END
-
-" --- Git Review Diffs --
-" Defines a collection of commands for navigating git diffs,
-" where diffs are displayed using --word-diff=plain
-augroup git_review_diffs
-    autocmd!
-    command! NextDiff call search("^\\(+\\|-\\)")
-    command! PreviousDiff call search("^\\(+\\|-\\)", "b")
-    " By using search, we can repeat searches for arbitrary
-    " file patterns with `n`.
-    command! -nargs=1 FindFile /^++.*<args>
-    command! NextFile call search("^+++")
-    command! PreviousFile call search("^+++", "b")
-    command! NextComment call search("^{#")
-    command! PreviousComment call search("^{#", "b")
-
-    au FileType diff nnoremap [[ :PreviousFile<CR>zt
-    au FileType diff nnoremap ]] :NextFile<CR>zt
-    au FileType diff vnoremap [[ :PreviousFile<CR>zt
-    au FileType diff vnoremap ]] :NextFile<CR>zt
-    au FileType diff onoremap [[ :PreviousFile<CR>zt
-    au FileType diff onoremap ]] :NextFile<CR>zt
-    au FileType diff nnoremap <Leader>k :PreviousDiff<CR>
-    au FileType diff nnoremap <Leader>j :NextDiff<CR>
-    au FileType diff vnoremap <Leader>k :PreviousDiff<CR>
-    au FileType diff vnoremap <Leader>j :NextDiff<CR>
-    au FileType diff onoremap <Leader>k :PreviousDiff<CR>
-    au FileType diff onoremap <Leader>j :NextDiff<CR>
-    au FileType diff nnoremap <Leader>K :PreviousComment<CR>
-    au FileType diff nnoremap <Leader>J :NextComment<CR>
-    au FileType diff vnoremap <Leader>K :PreviousComment<CR>
-    au FileType diff vnoremap <Leader>J :NextComment<CR>
-    au FileType diff onoremap <Leader>K :PreviousComment<CR>
-    au FileType diff onoremap <Leader>J :NextComment<CR>
 augroup END
 
 " --- Quickfix ---
