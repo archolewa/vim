@@ -17,6 +17,9 @@ au BufRead,BufNewFile *.diff set filetype=diff
 " I use git for backups.
 set noswapfile
 set nobackup
+colorscheme desert
+
+set tags=tags
 
 " Enables matchit, which provides for more sophisticated use of % for
 " matching programming language constructs. Required for
@@ -40,7 +43,7 @@ filetype plugin on
 syntax off
 set backspace=indent,eol,start
 " Hide buffers instead of closing them. Means I don't have to save before
-" switching, and may speed things up maybe?
+" switching?
 set hidden
 " I don't want my search results to be highlighted by default. For one thing,
 " I use search in some of my navigation keybindings, and I don't want to have
@@ -56,7 +59,6 @@ set shiftwidth=4
 set tabstop=4
 set shiftround
 set nofoldenable
-colorscheme desert
 highlight ColorColumn ctermbg=8
 set shortmess=atTWAI
 set cmdheight=2

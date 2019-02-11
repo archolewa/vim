@@ -1,8 +1,8 @@
 " --- Ocaml ---
 augroup ocaml_make
     autocmd!
-    set makeprg=make
-    set errorformat=%EFile\ \"%f\"\\,\ line\ %l\\,\ characters\ %c-%*\\d:,%CError:\ %m,%CWarning\ %m,%Z%m",+C%Error:\ %m,%Z%m
+    set makeprg=dune\ build\ @all
+    set errorformat=%EFile\ \"%f\"\\,\ line\ %l\\,\ characters\ %c-%*\\d:,%CError:\ %m,%CWarning\ %m,%ZHint:\ %m,%Z%m
 augroup END
 
 augroup ocaml_prefix
