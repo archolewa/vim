@@ -14,9 +14,6 @@ au BufRead,BufNewFile *.ebnf set filetype=ebnf
 au BufRead,BufNewFile *.avdl set filetype=avdl
 au BufRead,BufNewFile *.diff set filetype=diff
 
-" Disable netrw.
-let loaded_netrwPlugin = 1
-
 " I use git for backups.
 set noswapfile
 set nobackup
@@ -80,7 +77,7 @@ set nolist
 " through them anyway, might as well cycle through them.
 set completeopt=
 set pumheight=1
-set complete=.
+set complete=.,b
 
 function! ToggleStatusLine()
     if (&laststatus == 2)
@@ -193,7 +190,8 @@ augroup trim
     au BufWritePre * Trim
 augroup END
 
-" Should start using this instead of Caps Lock as escape, much more portable.
+" Should start using this instead of Caps Lock as escape, much more VM
+" friendly.
 inoremap jj <Esc>
 
 " Prompt for whether to create any directories that don't exist when saving,
@@ -210,17 +208,6 @@ augroup vimrc-auto-mkdir
   endfunction
 augroup END
 
-" Remove the background colors when using vimdiff.
-highlight DiffAdd ctermbg=NONE ctermfg=NONE
-highlight DiffDelete ctermbg=NONE ctermfg=Red
-highlight DiffText cterm=NONE ctermfg=Blue
-highlight DiffChange ctermbg=NONE ctermfg=NONE
-highlight DiffAdd guibg=NONE guifg=NONE
-highlight DiffDelete guibg=NONE guifg=Red
-highlight DiffText gui=NONE guifg=Green
-highlight DiffChange guibg=NONE guifg=NONE
-
-" Some changes to make macros more pleasant
 " Don't render every keystroke of the macro, just the end result
 set lazyredraw
 
@@ -236,17 +223,6 @@ inoremap <c-l> <c-x><c-o>
 " keyword completion
 inoremap <c-j> <c-p>
 
-" Close the preview window.
-nnoremap <Space>p :pc<CR>
-" Close all windows but this one.
-nnoremap <Space>o :only<CR>
-
-" Show filler lines to keep files synchronized, and open diff split vertically.
-set diffopt=filler,vertical
-
-" Opens the file under the cursor in an already existing buffer.
-nnoremap <Leader>gf :let mycurf=expand("<cfile>")<CR><C-w>w:execute("e ".mycurf)<CR>
-
 " Colors! My nemesis!
 au ColorScheme * hi Error NONE
 au ColorScheme * hi ErrorMsg NONE
@@ -260,15 +236,8 @@ let b:match_words='\[:\],<:>,\(:\),{:}'
 " Indent to the same level as the previous line with text. There isn't any
 " mnemonic for this, because it's optimized for typing speed and ease, since
 " I'll be doing it often. Because I don't want the computer indenting for me.
+" Because I'm weird.
 inoremap jk <Esc>:let x=@/<CR>?^\s*\S<CR>"yy^<c-o>"yP:let @/=x<CR>a
-
-" Delete the current line, then paste it below the one we're on now.
-nnoremap - ddp
-" Delete the current line, then paste it above the one we're on now.
-nnoremap _ ddkP
-" Converts current word to uppercase.
-inoremap <c-u> <Esc>viwUi
-nnoremap <c-u> viwU<Esc>
 
 " Automatically replace double dashes with a single longer dash in prose.
 augroup dash
@@ -280,16 +249,6 @@ augroup END
 set nocindent
 " Lets me find lines that are too long, without having to rely on colorcolumn.
 command! LongLines /^.\{80\}
-
-augroup avdl_search
-    autocmd!
-    au FileType avdl nnoremap [[ ?^  record<CR>
-    au FileType avdl nnoremap ]] /^  record<CR>
-    au FileType avdl vnoremap [[ ?^  record<CR>
-    au FileType avdl vnoremap ]] /^  record<CR>
-    au FileType avdl onoremap [[ ?^  record<CR>
-    au FileType avdl onoremap ]] /^  record<CR>
-augroup END
 
 " --- Quickfix ---
 " This manages autocommands for keeping the quickfix tame.
@@ -316,11 +275,32 @@ augroup quickfix_file_names
     au BufLeave quickfix delcommand Hide
 augroup END
 
-" We have some private things we need (like the URL for corporate
-" git repos), but I don't feel comfortable putting in a public dot file.
-source ~/.vim/private.vim
-
 " Display the current file name.
 nnoremap <space>f :echom @%<CR>
 
 command! -nargs=1 InsertPath r!find ~/ -name <args>
+
+" Filters the quickfix list down to entries whose body match the
+" given pattern.
+function! FilterQuickFix(pattern)
+    let qflist = getqflist()
+    let qflist = filter(qflist, 'match(v:val.text, a:pattern) >= 0')
+    call setqflist(qflist)
+endfunction
+
+" Like FilterQuickFix, except filter based on the filename rather
+" than entry body.
+function! FilterQuickFixFile(pattern)
+    let qflist = getqflist()
+    let qflist = filter(qflist, 'match(bufname(v:val.bufnr), a:pattern) >= 0')
+    call setqflist(qflist)
+endfunction
+
+command! -nargs=1 FilterQF call FilterQuickFix("<args>")
+command! -nargs=1 FilterQFFile call FilterQuickFixFile("<args>")
+nnoremap <Leader>q :FilterQF<Space>
+
+" We have some private things we need (like the URL for corporate
+" git repos), but I don't feel comfortable putting in a public dot file.
+source ~/.vim/private.vim
+

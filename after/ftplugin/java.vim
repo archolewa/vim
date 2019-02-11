@@ -5,7 +5,6 @@ augroup java_format
     " Allows me to easily find lines that are too long without having to
     " rely on checkstyle, or an obnoxious colored column.
     command! LongLines /^.\{120\}
-    au BufWritePre * TideUnusedImports
 augroup END
 
 function! Translate_javaclasspath()
@@ -130,4 +129,13 @@ augroup java_overview
      command! Outline :call Outline("^\\s*public")
 augroup END
 
+" Defines some commands to make it easy to run maven and dump the results in a
+" buffer.
+command! MvnRunAllNew enew | r! mvn test
+command! MvnRunAll %d | r! mvn test
+command! MvnRunTestNew enew | r!mvn -q test -Dtest=#:t:r
+command! MvnRunTest %d | r!mvn -q test -Dtest=%:t:r
 
+set formatoptions-=c
+set formatoptions-=r
+set formatoptions-=o

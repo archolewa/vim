@@ -110,7 +110,7 @@ endfunction
 " position.
 function! AddNewImport(import_groups, chosen_import, import_statement)
     " TODO: Pull this out into a user-settable global variable.
-    let group_ordering = ["com.flurry", "com.yahoo", "com", "org", "net", "spock", "edu", "io", "gnu", "lombok", "java", "javax"]
+    let group_ordering = ["com.flurry", "com.yahoo", "com", "org", "net", "spock", "antlr", "edu", "io", "gnu", "lombok", "java", "javax"]
     let group_ordering = map(group_ordering, 'split(v:val, "\\.")')
     let packages = split(a:chosen_import, '\.')
     let new_import_group = ExtractGroup(group_ordering, packages)
@@ -195,6 +195,7 @@ endfunction
 " Populates the quickfix window with a list of all the
 " unused imports in the current module.
 function! TideFindUnusedImports()
+    let curpos = getpos(".")
     let unusedimports = []
     let curpos = getpos(".")
     let importsEndingLineNumber = GetImportGroups()
@@ -216,9 +217,11 @@ function! TideFindUnusedImports()
         let search_pattern = "^" . import . "\\s*$"
         let qflist = add(qflist, {"pattern": search_pattern, "filename":expand("%")})
     endfor
-    call setqflist(qflist)
-    if len(qflist) > 0 
+    if len(qflist) > 0
+        call setqflist(qflist)
         execute "cc"
+    else
+        call setpos(".", curpos)
     endif
 endfunction!
 
@@ -250,7 +253,7 @@ endfunction
 let package_cache = {}
 " Given a filename, returns the package for the Java class in said file.
 function! GetClassPackage(filename)
-    if has_key(g:package_cache, a:filename) 
+    if has_key(g:package_cache, a:filename)
         return g:package_cache[a:filename]
     endif
     let filepath = fnamemodify(a:filename, ":h")
@@ -314,6 +317,8 @@ function! FilterTagsScope(identifier, maxtags, partial, scope)
         else
             if GetClassPackage(tag.filename) == "java.lang"
                 let javalangtags = add(javalangtags, tagAndIndex)
+            elseif !a:scope && GetClassPackage(tag.filename) == "java.util"
+                let javalangtags = add(javalangtags, tagAndIndex)
             elseif has_key(importsmap, Translate_directory(tag.filename)) > 0
                 let inscopetags = add(inscopetags, tagAndIndex)
                 let tagcount += 1
@@ -324,7 +329,7 @@ function! FilterTagsScope(identifier, maxtags, partial, scope)
     endfor
     let result = extend(infiletags, inscopetags)
     let result = extend(result, javalangtags)
-    if !a:scope && tagcount < a:maxtags 
+    if !a:scope && tagcount < a:maxtags
         let result = extend(result, thisprojecttags)
         let result = extend(result, filteredtags)[:a:maxtags-1]
     endif
@@ -437,6 +442,9 @@ function! GetTagSignature(tag)
         for entry in split(system(command), "\n")
             let lines = add(lines, entry)
         endfor
+        if len(lines) == 0
+            return a:tag.name
+        endif
         call setqflist(originalquickfix)
         let signature = []
         let line = lines[0]
@@ -475,12 +483,12 @@ function! TideOmniFunction(findstart, base)
         return col('.')-1
     endif
     let filename = expand("%")
-    let matchingtags = FilterTagsScope(a:base, 40, 1, 1)    
+    let matchingtags = FilterTagsScope(a:base, 40, 1, 1)
     for tagIndex in matchingtags
         let tag = tagIndex.tag
         if tag.kind ==# "m"
             let signature = GetTagSignature(tag)
-        else 
+        else
             let signature = tag.name
         endif
         call complete_add({"word": signature})
