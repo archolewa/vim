@@ -83,10 +83,12 @@ function! Import(tagidentifier)
     endfor
     let package_location = search("^package", 'wn')
     let curpos = getcurpos()
+    let current_text = getline(".")[col(".")-1:]
     execute "silent " . string(package_location+1) . "," . string(imports_end-1) . "delete"
     call append(package_location, import_statements)
     let @/ = original_search
     call setpos(".", curpos)
+    call search(current_text, 'Wc')
 endfunction
 
 " Takes a list of lists, and a list of strings. Each entry in import_groups
@@ -110,7 +112,7 @@ endfunction
 " position.
 function! AddNewImport(import_groups, chosen_import, import_statement)
     " TODO: Pull this out into a user-settable global variable.
-    let group_ordering = ["com.flurry", "com.yahoo", "com", "org", "net", "spock", "antlr", "edu", "io", "gnu", "lombok", "java", "javax"]
+    let group_ordering = ["com.flurry", "com.yahoo", "com", "org", "net", "spock", "antlr", "edu", "io", "gnu", "lombok", "yjava", "java", "javax"]
     let group_ordering = map(group_ordering, 'split(v:val, "\\.")')
     let packages = split(a:chosen_import, '\.')
     let new_import_group = ExtractGroup(group_ordering, packages)
