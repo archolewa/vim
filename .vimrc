@@ -81,19 +81,7 @@ set completeopt=
 set pumheight=1
 set complete=.,b
 
-function! ToggleStatusLine()
-    if (&laststatus == 2)
-        set laststatus=0
-    else
-        set laststatus=2
-    endif
-endfunction
-
-" By default we don't display the status line, but we can turn it on and off
-" if we need it (say to see the git branch/filename or current line number)
-set laststatus=0
-command! ToggleStatusLine :call ToggleStatusLine()<CR>
-
+" Turn off the status line.
 set statusline+=%f:%l:%c;
 
 " Turn off that awful highlighting in the quickfix window
@@ -104,7 +92,7 @@ let g:diff_translations = 0
 
 "Repeating the previous find will be quite useful considering how often I
 "rely on it, but ; is SOOO convenient as the leader key.
-nnoremap \ ;
+nnoremap - ;
 let mapleader = ";"
 
 set title
@@ -266,12 +254,12 @@ augroup quickfix_file_names
     au FileType qf set conceallevel=2
     au FileType qf set concealcursor=n
     au FileType qf syntax match qfFileName /^.\{-\}\s\s*/ transparent conceal
-    au FileType qf command! ConcealFile :set concealcursor=n
+    au FileType qf command! HideFile :set concealcursor=n
     au FileType qf command! ShowFile :set concealcursor=
     au FileType qf command! Show :set conceallevel=0
     au FileType qf command! Hide :set conceallevel=2
     au BufLeave quickfix set conceallevel=0
-    au BufLeave quickfix delcommand ConcealFile
+    au BufLeave quickfix delcommand HideFile
     au BufLeave quickfix delcommand ShowFile
     au BufLeave quickfix delcommand Show
     au BufLeave quickfix delcommand Hide

@@ -43,27 +43,6 @@ augroup java_make
      command! CopyTestFilename let @+ = expand("%:t:r")
 augroup END
 
-" Defines a collection of commands for making common patterns in Java easier.
-augroup java_generate
-    autocmd!
-    function! GetClassname()
-        let c = @c
-        let @c = expand("%:t:r")
-        normal "cp
-        let @c = c
-    endfunction
-    command! Classname :call GetClassname()
-    " Extracts a variable out of a function signature and creates
-    " a local variable of the same type and name.
-    " So the line:
-    " foo(int x)
-    " becomes
-    " int x =
-    " foo(x)
-    command! ExtractVariable :normal 2yw"_dw0"ay^O<Esc>"app
-    nnoremap <Leader>v :ExtractVariable<CR>
-augroup END
-
 function! Children(className, directory)
     execute 'grep -r --include=*.java "\\(extends\\|implements\\) ' . a:className . '"' . a:directory
 endfunction
@@ -133,8 +112,8 @@ augroup END
 " buffer.
 command! MvnRunAllNew enew | r! mvn test
 command! MvnRunAll %d | r! mvn test
-command! MvnRunTestNew enew | r!mvn -q test -Dtest=#:t:r
-command! MvnRunTest %d | r!mvn -q test -Dtest=%:t:r
+command! MvnRunTestNew enew | r!mvn -q test -Dcheckstyle.skip=true -Dspotbugs.skip=true -Dtest=#:t:r
+command! MvnRunTest %d | r!mvn -q test -Dcheckstyle.skip=true -Dspotbugs.skip=true -Dtest=#:t:r
 
 set formatoptions-=c
 set formatoptions-=r
