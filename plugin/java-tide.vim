@@ -227,56 +227,10 @@ function! TideFindUnusedImports()
     endif
 endfunction!
 
-
-" TODO: Make this a configuration parameter.
-let custom_classpath = ["/Users/acholewa/flurry/util/", "/Users/acholewa/flurry/dbAccessLayer/", "/Users/acholewa/flurry/metricStoreAPI/",  "/Users/acholewa/flurry/hbase/", "/Users/acholewa/flurry/hbaseCommon/", "/Users/acholewa/kafka/kafka/connect", "target/generated-sources/avro"]
-function! FindClassPathForFile(filename)
-    let directory = fnamemodify(a:filename, ":h")
-    let match_result = match(directory, "/tide-sources")
-    if match_result > - 1
-        " Need to exclude the trailing space.
-        return directory[:match_result-1]
-    else
-        " This happens for files that aren't sources from the classpath and therefore don't live under `tide-sources` somewhere.
-        let workingDirectory = getcwd()
-        let workingDirectoryMatch = matchend(directory, "^" . workingDirectory)
-        if workingDirectoryMatch > -1
-            let packageStart = match(directory, "com\\|org\\|java\\|io\\|javax\\|net\\|edu", workingDirectoryMatch)
-            return directory[:packageStart-2]
-        endif
-        for path in g:custom_classpath
-            if match(directory, "^" . path) > -1
-                return path
-            endif
-        endfor
-    endif
-endfunction
-
-let package_cache = {}
 " Given a filename, returns the package for the Java class in said file.
 function! GetClassPackage(filename)
-    if has_key(g:package_cache, a:filename)
-        return g:package_cache[a:filename]
-    endif
-    let filepath = fnamemodify(a:filename, ":h")
-    let fileclasspath = FindClassPathForFile(a:filename)
-    let match_result = matchend(filepath, fileclasspath)
-    let package_path = filepath[(match_result+1):]
-    let tide_sources_end = matchend(package_path, "tide-sources/")
-    if tide_sources_end > -1
-        let package_path = package_path[(tide_sources_end):]
-    else
-        let test_code = matchend(filepath, "src/test/java/")
-        if test_code > -1
-            let package_path = filepath[(test_code):]
-        else
-            " TODO: Pull src/main/java out into a configuration parameter.
-            let package_path = filepath[(matchend(a:filename, "src/main/java/")):]
-        endif
-    endif
-    let package = substitute(package_path, "/", ".", "g")
-    let g:package_cache[a:filename] = package
-    return package
+    let system_command  = 'grep -s -w -h -m1 ^package ' . a:filename . ' | cut -d " " -f2 | cut -d ";" -f1'
+    return Trim(system(system_command))
 endfunction
 
 let max_tags = 8
@@ -429,7 +383,9 @@ function! Tidetprevious(bang)
 endfunction
 
 function! Trim(input_string)
-    return substitute(a:input_string, '^\s*\(.\{-}\)\s*$', '\1', '')
+    " I guess \n doesn't count as whitespace in vim?
+    let result = substitute(substitute(a:input_string, '\v^\s*(.{-})\s*$', '\1', ''), '\v^\n*(.{-})\n*$', '\1', '')
+    return result
 endfunction
 
 function! GetTagSignature(tag)
