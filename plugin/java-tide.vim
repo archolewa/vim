@@ -229,7 +229,7 @@ endfunction!
 
 
 " TODO: Make this a configuration parameter.
-let custom_classpath = ["/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect", "target/generated-sources/avro"]
+let custom_classpath = ["/Users/acholewa/flurry/util/", "/Users/acholewa/flurry/dbAccessLayer/", "/Users/acholewa/flurry/metricStoreAPI/",  "/Users/acholewa/flurry/hbase/", "/Users/acholewa/flurry/hbaseCommon/", "/Users/acholewa/kafka/kafka/connect", "target/generated-sources/avro"]
 function! FindClassPathForFile(filename)
     let directory = fnamemodify(a:filename, ":h")
     let match_result = match(directory, "/tide-sources")
