@@ -89,6 +89,14 @@ function! Import(tagidentifier)
     let @/ = original_search
     call setpos(".", curpos)
     call search(current_text, 'Wc')
+
+    if has_key(g:global_imports_cache, @%)
+        let imports_cache = g:global_imports_cache[@%]
+    else
+        let imports_cache = {}
+        let g:global_imports_cache[@%] = {}
+    endif
+    call AddImportToCache(join(split(chosen_import, '\.')[:-2], '\.'), imports_cache)
 endfunction
 
 " Takes a list of lists, and a list of strings. Each entry in import_groups
@@ -227,12 +235,36 @@ function! TideFindUnusedImports()
     endif
 endfunction!
 
+let package_cache = {}
 " Given a filename, returns the package for the Java class in said file.
 function! GetClassPackage(filename)
+    if has_key(g:package_cache, a:filename)
+        return g:package_cache[a:filename]
+    endif
     let system_command  = 'grep -s -w -h -m1 ^package ' . a:filename . ' | cut -d " " -f2 | cut -d ";" -f1'
-    return Trim(system(system_command))
+    let package = Trim(system(system_command))
+    let g:package_cache[a:filename] = package
+    return package
 endfunction
 
+function! InScope(importsmap, filename)
+    for package in keys(a:importsmap)
+        if match(a:filename, a:importsmap[package]) > -1
+            return 1
+        endif
+    endfor
+    return 0
+endfunction
+
+function! AddImportToCache(package, imports_cache)
+    let classmap = {}
+    for tag in taglist("^" . a:package . "$")
+        let classmap[fnamemodify(tag.filename, ":t:r")] = tag.filename
+    endfor
+    let a:imports_cache[a:package] = classmap
+endfunction
+
+let global_imports_cache = {}
 let max_tags = 8
 " Given an identifier, returns a list of dictionaries containing two entries:
 " 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
@@ -252,44 +284,56 @@ function! FilterTagsScope(identifier, maxtags, partial, scope)
     let infiletags = []
     let inscopetags = []
     let filteredtags = []
-    let thisprojecttags = []
     let javalangtags = []
-    let thisfilepackage = GetClassPackage(expand("%"))
-    let importsmap = {(thisfilepackage):1}
+    let importsmap = {(@%):1}
+    if has_key(g:global_imports_cache, @%)
+        let imports_cache = g:global_imports_cache[@%]
+    else
+        let imports_cache = {}
+        let g:global_imports_cache[@%] = imports_cache
+    endif
     for group in GetImportGroups()[0]
         for import in group
-            let package = split(split(import)[1], ';')[0]
-            let importsmap[package] = 1
+            let fully_qualified_class = split(split(split(import)[1], ';')[0], '\.')
+            let package = join(fully_qualified_class[:-2], '\.')
+            let class = fully_qualified_class[-1]
+            if !has_key(imports_cache, package)
+                call AddImportToCache(package, imports_cache)
+            endif
+            let classmap = imports_cache[package]
+            if has_key(classmap, class)
+                let importsmap[classmap[class]] = 1
+            endif
         endfor
     endfor
     let index = 0
     let tagcount = 0
     for tag in tags
         let index = index + 1
-        let tagAndIndex = {"tag": tag, "taglistindex": index}
-        if match(tag.filename, @%) > -1
+        if tag.filename ==# @%
            let infiletags = add(infiletags, {"tag": tag, "taglistindex": index})
-           let tagcount += 1
         else
-            if GetClassPackage(tag.filename) == "java.lang"
-                let javalangtags = add(javalangtags, tagAndIndex)
-            elseif !a:scope && GetClassPackage(tag.filename) == "java.util"
-                let javalangtags = add(javalangtags, tagAndIndex)
-            elseif has_key(importsmap, Translate_directory(tag.filename)) > 0
-                let inscopetags = add(inscopetags, tagAndIndex)
+            if match(tag.filename, "java/lang") > -1
+                let javalangtags = add(javalangtags, {"tag": tag, "taglistindex": index})
                 let tagcount += 1
-            else
-                let filteredtags = add(filteredtags, tagAndIndex)
+            elseif !a:scope && (match(tag.filename, "java/util") > -1)
+                let javalangtags = add(javalangtags, {"tag": tag, "taglistindex": index})
+                let tagcount += 1
+            elseif has_key(importsmap, tag.filename) > 0
+                let inscopetags = add(inscopetags, {"tag": tag, "taglistindex": index})
+                let tagcount += 1
+            elseif !a:scope
+                let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
+                let tagcount += 1
             endif
         endif
     endfor
     let result = extend(infiletags, inscopetags)
     let result = extend(result, javalangtags)
-    if !a:scope && tagcount < a:maxtags
-        let result = extend(result, thisprojecttags)
-        let result = extend(result, filteredtags)[:a:maxtags-1]
+    if !a:scope
+        let result = extend(result, filteredtags)
     endif
-    return result
+    return result[:a:maxtags-1]
 endfunction
 
 " TODO: Pull out into a configuration parameter.
@@ -340,7 +384,6 @@ function! TideTselect(identifier, bang)
     let g:lastTags = FilterTagsScope(a:identifier, g:max_tags, 0, 1)
     let g:lastTagsIndex = 0
     if len(g:lastTags) == 0
-        echo("No tags found.")
         return
     endif
     " TODO: Pull this out into a configuration parameter.
@@ -441,7 +484,7 @@ function! TideOmniFunction(findstart, base)
         return col('.')-1
     endif
     let filename = expand("%")
-    let matchingtags = FilterTagsScope(a:base, 40, 1, 1)
+    let matchingtags = FilterTagsScope(a:base, 40, 0, 1)
     for tagIndex in matchingtags
         let tag = tagIndex.tag
         if tag.kind ==# "m"
