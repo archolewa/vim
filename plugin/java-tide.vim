@@ -89,14 +89,6 @@ function! Import(tagidentifier)
     let @/ = original_search
     call setpos(".", curpos)
     call search(current_text, 'Wc')
-
-    if has_key(g:global_imports_cache, @%)
-        let imports_cache = g:global_imports_cache[@%]
-    else
-        let imports_cache = {}
-        let g:global_imports_cache[@%] = {}
-    endif
-    call AddImportToCache(join(split(chosen_import, '\.')[:-2], '\.'), imports_cache)
 endfunction
 
 " Takes a list of lists, and a list of strings. Each entry in import_groups
@@ -256,15 +248,27 @@ function! InScope(importsmap, filename)
     return 0
 endfunction
 
-function! AddImportToCache(package, imports_cache)
-    let classmap = {}
-    for tag in taglist("^" . a:package . "$")
-        let classmap[fnamemodify(tag.filename, ":t:r")] = tag.filename
+let imports_cache = {}
+function! AddImportToCache(packages)
+    let new_packages = filter(copy(a:packages), '!has_key(g:imports_cache, v:val)')
+    if len(new_packages) == 0
+        return
+    endif
+    let package_string = '^' . join(new_packages, '\|^')
+    let system_call = 'grep "' . package_string . '" .package-map'
+    for line in split(system(system_call), '\n')
+        let package = split(line)[0]
+        let filename = split(line)[1]
+        if has_key(g:imports_cache, package)
+            let classmap = g:imports_cache[package]
+        else
+            let classmap = {}
+            let g:imports_cache[package] = classmap
+        end
+        let classmap[fnamemodify(filename, ":t:r")] = filename
     endfor
-    let a:imports_cache[a:package] = classmap
 endfunction
 
-let global_imports_cache = {}
 let max_tags = 8
 " Given an identifier, returns a list of dictionaries containing two entries:
 " 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
@@ -285,25 +289,25 @@ function! FilterTagsScope(identifier, maxtags, partial, scope)
     let inscopetags = []
     let filteredtags = []
     let javalangtags = []
+    let packagesClass = {}
     let importsmap = {(@%):1}
-    if has_key(g:global_imports_cache, @%)
-        let imports_cache = g:global_imports_cache[@%]
-    else
-        let imports_cache = {}
-        let g:global_imports_cache[@%] = imports_cache
-    endif
     for group in GetImportGroups()[0]
         for import in group
             let fully_qualified_class = split(split(split(import)[1], ';')[0], '\.')
-            let package = join(fully_qualified_class[:-2], '\.')
+            let package = join(fully_qualified_class[:-2], '.')
             let class = fully_qualified_class[-1]
-            if !has_key(imports_cache, package)
-                call AddImportToCache(package, imports_cache)
+            if !has_key(packagesClass, package)
+                let packagesClass[package] = []
             endif
-            let classmap = imports_cache[package]
-            if has_key(classmap, class)
-                let importsmap[classmap[class]] = 1
-            endif
+            call add(packagesClass[package], class)
+        endfor
+    endfor
+    call AddImportToCache(keys(packagesClass))
+    for package in keys(packagesClass)
+        let classes = packagesClass[package]
+        let classmap = g:imports_cache[package]
+        for class in classes
+            let importsmap[classmap[class]] = 1
         endfor
     endfor
     let index = 0
@@ -484,7 +488,7 @@ function! TideOmniFunction(findstart, base)
         return col('.')-1
     endif
     let filename = expand("%")
-    let matchingtags = FilterTagsScope(a:base, 40, 0, 1)
+    let matchingtags = FilterTagsScope(a:base, 40, 1, 1)
     for tagIndex in matchingtags
         let tag = tagIndex.tag
         if tag.kind ==# "m"
