@@ -239,15 +239,18 @@ function! GetClassPackage(filename)
     return package
 endfunction
 
-function! InScope(importsmap, filename)
-    for package in keys(a:importsmap)
-        if match(a:filename, a:importsmap[package]) > -1
+function! InScope(filenamesinscope, filename)
+    for package in keys(a:filenamesinscope)
+        if match(a:filename, a:filenamesinscope[package]) > -1
             return 1
         endif
     endfor
     return 0
 endfunction
 
+" A mapping from a java package to dictionary, which is itself a
+" mapping from classname to that class' file. So,
+" java.util -> {Map -> /path/to/java/util/Map.java, Set -> /path/to/java/util/Set, ...}
 let imports_cache = {}
 function! AddImportToCache(packages)
     let new_packages = filter(copy(a:packages), '!has_key(g:imports_cache, v:val)')
@@ -267,6 +270,10 @@ function! AddImportToCache(packages)
         end
         let classmap[fnamemodify(filename, ":t:r")] = filename
     endfor
+endfunction
+
+function! ClearImportsCache()
+    let g:imports_cache = {}
 endfunction
 
 let max_tags = 8
@@ -290,25 +297,39 @@ function! FilterTagsScope(identifier, maxtags, partial, scope)
     let filteredtags = []
     let javalangtags = []
     let packagesClass = {}
-    let importsmap = {(@%):1}
+    let thispackage = GetClassPackage(@%)
+    call AddImportToCache([thispackage])
+    " A set of filenames
+    let filenamesinscope = {}
+    let filenamesbyclass = g:imports_cache[thispackage]
+    for class in keys(filenamesbyclass)
+        let filenamesinscope[filenamesbyclass[class]] = 1
+    endfor
     for group in GetImportGroups()[0]
         for import in group
-            let fully_qualified_class = split(split(split(import)[1], ';')[0], '\.')
+            let fully_qualified_class = split(split(split(import)[-1], ';')[0], '\.')
             let package = join(fully_qualified_class[:-2], '.')
             let class = fully_qualified_class[-1]
             if !has_key(packagesClass, package)
                 let packagesClass[package] = []
             endif
-            call add(packagesClass[package], class)
+            if class ==# "*"
+                call AddImportToCache([package])
+                call extend(packagesClass[package], keys(g:imports_cache[package]))
+            else
+                call add(packagesClass[package], class)
+            end
         endfor
     endfor
     call AddImportToCache(keys(packagesClass))
     for package in keys(packagesClass)
         let classes = packagesClass[package]
-        let classmap = g:imports_cache[package]
-        for class in classes
-            let importsmap[classmap[class]] = 1
-        endfor
+        if has_key(g:imports_cache, package)
+            let classmap = g:imports_cache[package]
+            for class in classes
+                let filenamesinscope[classmap[class]] = 1
+            endfor
+        endif
     endfor
     let index = 0
     let tagcount = 0
@@ -323,7 +344,7 @@ function! FilterTagsScope(identifier, maxtags, partial, scope)
             elseif !a:scope && (match(tag.filename, "java/util") > -1)
                 let javalangtags = add(javalangtags, {"tag": tag, "taglistindex": index})
                 let tagcount += 1
-            elseif has_key(importsmap, tag.filename) > 0
+            elseif has_key(filenamesinscope, tag.filename) > 0
                 let inscopetags = add(inscopetags, {"tag": tag, "taglistindex": index})
                 let tagcount += 1
             elseif !a:scope
@@ -512,3 +533,4 @@ command! -nargs=1 -complete=tag -count -bang Tidetag call TideJumpTag("<args>", 
 command! -nargs=1 -complete=tag -bang Tidetselect call TideTselect("<args>", "<bang>")
 command! -bang Tidetnext call Tidetnext("<bang>")
 command! -bang Tidetprevious call Tidetprevious("<bang>")
+command! TideClearImportsCache call ClearImportsCache()
