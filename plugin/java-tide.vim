@@ -288,9 +288,14 @@ let max_tags = 8
 " and direct imports).
 function! FilterTagsScope(identifier, maxtags, partial, scope)
     if a:partial
-        let tags = taglist("^" . a:identifier . "\\C")
+        let searchpattern = "^" . a:identifier . "\\C"
     else
-        let tags = taglist("^" . a:identifier . "$")
+        let searchpattern = "^" . a:identifier . "$"
+    endif
+    if v:version > 799
+        let tags = taglist(searchpattern, @%)
+    else
+        let tags = taglist(searchpattern)
     endif
     let infiletags = []
     let inscopetags = []
@@ -327,7 +332,9 @@ function! FilterTagsScope(identifier, maxtags, partial, scope)
         if has_key(g:imports_cache, package)
             let classmap = g:imports_cache[package]
             for class in classes
-                let filenamesinscope[classmap[class]] = 1
+                if has_key(classmap, class)
+                    let filenamesinscope[classmap[class]] = 1
+                endif
             endfor
         endif
     endfor
@@ -358,7 +365,7 @@ function! FilterTagsScope(identifier, maxtags, partial, scope)
     if !a:scope
         let result = extend(result, filteredtags)
     endif
-    return result[:a:maxtags-1]
+    return result[:(a:maxtags-1)]
 endfunction
 
 " TODO: Pull out into a configuration parameter.
@@ -374,8 +381,22 @@ function! FilterTags(identifier, maxtags, partial)
     return FilterTagsScope(a:identifier, a:maxtags, a:partial, 0)
 endfunction
 
+let tideTagStart = []
 function! JumpToTag(tag, bang, identifier)
-    execute "silent " . (a:tag.taglistindex) . "tag" . a:bang . " " . a:identifier
+    if v:version > 799
+        let command = "silent " . (a:tag.taglistindex) . "tag" . a:bang . " " . a:identifier
+        execute command
+    else
+        call add(g:tideTagStart, getcurpos())
+        execute "silent e " . fnameescape(a:tag.tag.filename)
+        execute "silent " . substitute(a:tag.tag.cmd, "\\*", "\\\\*", "g")
+    endif
+endfunction
+
+function! TideJumpBackFromTag()
+    if !empty(g:tideTagStart)
+        let newpos = remove(g:tideTagStart, -1)
+        call setpos(newpos)
 endfunction
 
 " This is used to store the last set of filtered tags
@@ -389,9 +410,15 @@ function! TideJumpTag(identifier, count, bang)
         echo("No tags found.")
         return
     endif
-    let g:lastTagsIndex = min([a:count, len(g:lastTags) - 1])
+    let numtags = len(g:lastTags)
+    let g:lastTagsIndex = min([a:count, numtags - 1])
     let tag = g:lastTags[g:lastTagsIndex]
+    let originalfile = @%
     call JumpToTag(tag, a:bang, a:identifier)
+    if originalfile !=# @%
+        echom(@%)
+    endif
+    echom("tag " . g:lastTagsIndex+1 . " of " . numtags)
 endfunction
 
 function! GetClass(tag)
@@ -434,7 +461,7 @@ function! Tidetnext(bang)
     let identifier = tagIndex.tag.name
     execute "e " . tagIndex.tag.filename
     normal gg
-    execute tagIndex.tag.cmd
+    execute "silent " . substitute(tagIndex.tag.cmd, "\\*", "\\\\*", "g")
 endfunction
 
 function! Tidetprevious(bang)
@@ -447,7 +474,7 @@ function! Tidetprevious(bang)
     let identifier = tagIndex.tag.name
     execute "e " . tagIndex.tag.filename
     normal gg
-    execute tagIndex.tag.cmd
+    execute fnameescape(tagIndex.tag.cmd)
 endfunction
 
 function! Trim(input_string)
@@ -530,6 +557,7 @@ command! -nargs=1 -complete=tag TideImport call Import("<args>")
 command! TideUnusedImports call TideFindUnusedImports()
 
 command! -nargs=1 -complete=tag -count -bang Tidetag call TideJumpTag("<args>", "<count>", "<bang>")
+command! TideReturnTag call TideJumpBackFromTag()
 command! -nargs=1 -complete=tag -bang Tidetselect call TideTselect("<args>", "<bang>")
 command! -bang Tidetnext call Tidetnext("<bang>")
 command! -bang Tidetprevious call Tidetprevious("<bang>")

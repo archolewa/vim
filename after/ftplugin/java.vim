@@ -17,6 +17,49 @@ function! Translate_javaclasspath()
     return classpath . java_classpath
 endfunction
 
+function! Generate_package(type, leading_package_name)
+    let fragments = split(expand("%:r"), "/")
+    let classname = fragments[-1]
+    let package_start = 0
+    for fragment in fragments
+        if fragment ==# a:leading_package_name
+            break
+        endif
+        let package_start = package_start + 1
+    endfor
+    let packages = fragments[package_start : -2]
+    let header = ["/\*", " * Copyright (c) 2019, Verizon Media Inc. All rights reserved.", " *\/"]
+    call add(header, "package " . join(packages, ".") . ";")
+    call add(header, "")
+    call add(header, "public " . a:type . " " . classname . " {")
+    call add(header, "}")
+    call append(0, header)
+    normal ddk$b
+endfunction
+
+function! Generate_javadoc()
+    let line = getline(".")
+    let start_nonwhitespace = match(line, "\\S")
+    if start_nonwhitespace > 0
+        let indent = line[0:(start_nonwhitespace-1)]
+    else
+        let indent = ''
+    endif
+    normal {
+    let javadoc = [indent . '/**', indent . ' ' . '*']
+    call add(javadoc, indent . ' ' . '*/')
+    call append(line('.'), javadoc)
+    normal 2j$
+endfunction
+
+augroup java_tedium
+    autocmd!
+    command! ClassHeader call Generate_package("class", "com")
+    command! InterfaceHeader call Generate_package("interface", "com")
+    command! EnumHeader call Generate_package("enum", "com")
+    command! Javadoc call Generate_javadoc()
+augroup END
+
 augroup java_include
     set tags=tags
     autocmd!
@@ -84,6 +127,7 @@ augroup java_tags
     " all methods are indented 4 spaces in the Java projects I work on.
     " We also don't make use of package-private.
      nnoremap <C-\> :Tidetag <C-R><C-W><cr>
+     nnoremap <C-U> :TideJumpBackFromTag
      nnoremap g\ :Tidetselect <C-R><C-W><cr>
      nnoremap g<C-\> :Tidetlist<CR>
      nnoremap <C-n> :Tidetnext<CR>

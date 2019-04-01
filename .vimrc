@@ -53,7 +53,6 @@ set nohlsearch
 " The computer is not allowed to do things for me.
 set nowrap
 set ruler
-set list
 set expandtab
 set shiftwidth=4
 set tabstop=4
