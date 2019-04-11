@@ -19,6 +19,8 @@ set noswapfile
 set nobackup
 colorscheme desert
 
+execute pathogen#infect()
+
 set tags=tags
 
 " Enables matchit, which provides for more sophisticated use of % for
