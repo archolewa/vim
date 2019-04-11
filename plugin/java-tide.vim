@@ -227,59 +227,56 @@ function! TideFindUnusedImports()
     endif
 endfunction!
 
-
-" TODO: Make this a configuration parameter.
-let custom_classpath = ["/Users/acholewa/gozer/flurry/dbAccessLayer/", "/Users/acholewa/work/kafka/connect", "target/generated-sources/avro"]
-function! FindClassPathForFile(filename)
-    let directory = fnamemodify(a:filename, ":h")
-    let match_result = match(directory, "/tide-sources")
-    if match_result > - 1
-        " Need to exclude the trailing space.
-        return directory[:match_result-1]
-    else
-        " This happens for files that aren't sources from the classpath and therefore don't live under `tide-sources` somewhere.
-        let workingDirectory = getcwd()
-        let workingDirectoryMatch = matchend(directory, "^" . workingDirectory)
-        if workingDirectoryMatch > -1
-            let packageStart = match(directory, "com\\|org\\|java\\|io\\|javax\\|net\\|edu", workingDirectoryMatch)
-            return directory[:packageStart-2]
-        endif
-        for path in g:custom_classpath
-            if match(directory, "^" . path) > -1
-                return path
-            endif
-        endfor
-    endif
-endfunction
-
 let package_cache = {}
 " Given a filename, returns the package for the Java class in said file.
 function! GetClassPackage(filename)
     if has_key(g:package_cache, a:filename)
         return g:package_cache[a:filename]
     endif
-    let filepath = fnamemodify(a:filename, ":h")
-    let fileclasspath = FindClassPathForFile(a:filename)
-    let match_result = matchend(filepath, fileclasspath)
-    let package_path = filepath[(match_result+1):]
-    let tide_sources_end = matchend(package_path, "tide-sources/")
-    if tide_sources_end > -1
-        let package_path = package_path[(tide_sources_end):]
-    else
-        let test_code = matchend(filepath, "src/test/java/")
-        if test_code > -1
-            let package_path = filepath[(test_code):]
-        else
-            " TODO: Pull src/main/java out into a configuration parameter.
-            let package_path = filepath[(matchend(a:filename, "src/main/java/")):]
-        endif
-    endif
-    let package = substitute(package_path, "/", ".", "g")
+    let system_command  = 'grep -s -w -h -m1 ^package ' . a:filename . ' | cut -d " " -f2 | cut -d ";" -f1'
+    let package = Trim(system(system_command))
     let g:package_cache[a:filename] = package
     return package
 endfunction
 
-let max_tags = 8
+function! InScope(filenamesinscope, filename)
+    for package in keys(a:filenamesinscope)
+        if match(a:filename, a:filenamesinscope[package]) > -1
+            return 1
+        endif
+    endfor
+    return 0
+endfunction
+
+" A mapping from a java package to dictionary, which is itself a
+" mapping from classname to that class' file. So,
+" java.util -> {Map -> /path/to/java/util/Map.java, Set -> /path/to/java/util/Set, ...}
+let imports_cache = {}
+function! AddImportToCache(packages)
+    let new_packages = filter(copy(a:packages), '!has_key(g:imports_cache, v:val)')
+    if len(new_packages) == 0
+        return
+    endif
+    let package_string = '^' . join(new_packages, '\|^')
+    let system_call = 'grep "' . package_string . '" .package-map'
+    for line in split(system(system_call), '\n')
+        let package = split(line)[0]
+        let filename = split(line)[1]
+        if has_key(g:imports_cache, package)
+            let classmap = g:imports_cache[package]
+        else
+            let classmap = {}
+            let g:imports_cache[package] = classmap
+        end
+        let classmap[fnamemodify(filename, ":t:r")] = filename
+    endfor
+endfunction
+
+function! ClearImportsCache()
+    let g:imports_cache = {}
+endfunction
+
+let max_tags = 20
 " Given an identifier, returns a list of dictionaries containing two entries:
 " 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
 " 2. taglistindex - The tag's original index in the taglist. This allows us to use
@@ -291,51 +288,84 @@ let max_tags = 8
 " and direct imports).
 function! FilterTagsScope(identifier, maxtags, partial, scope)
     if a:partial
-        let tags = taglist("^" . a:identifier . "\\C")
+        let searchpattern = "^" . a:identifier . "\\C"
     else
-        let tags = taglist("^" . a:identifier . "$")
+        let searchpattern = "^" . a:identifier . "$"
+    endif
+    if v:version > 799
+        let tags = taglist(searchpattern, @%)
+    else
+        let tags = taglist(searchpattern)
     endif
     let infiletags = []
     let inscopetags = []
     let filteredtags = []
-    let thisprojecttags = []
     let javalangtags = []
-    let thisfilepackage = GetClassPackage(expand("%"))
-    let importsmap = {(thisfilepackage):1}
+    let packagesClass = {}
+    let thispackage = GetClassPackage(@%)
+    call AddImportToCache([thispackage])
+    " A set of filenames
+    let filenamesinscope = {}
+    let filenamesbyclass = g:imports_cache[thispackage]
+    for class in keys(filenamesbyclass)
+        let filenamesinscope[filenamesbyclass[class]] = 1
+    endfor
     for group in GetImportGroups()[0]
         for import in group
-            let package = split(split(import)[1], ';')[0]
-            let importsmap[package] = 1
+            let fully_qualified_class = split(split(split(import)[-1], ';')[0], '\.')
+            let package = join(fully_qualified_class[:-2], '.')
+            let class = fully_qualified_class[-1]
+            if !has_key(packagesClass, package)
+                let packagesClass[package] = []
+            endif
+            if class ==# "*"
+                call AddImportToCache([package])
+                call extend(packagesClass[package], keys(g:imports_cache[package]))
+            else
+                call add(packagesClass[package], class)
+            end
         endfor
+    endfor
+    call AddImportToCache(keys(packagesClass))
+    for package in keys(packagesClass)
+        let classes = packagesClass[package]
+        if has_key(g:imports_cache, package)
+            let classmap = g:imports_cache[package]
+            for class in classes
+                if has_key(classmap, class)
+                    let filenamesinscope[classmap[class]] = 1
+                endif
+            endfor
+        endif
     endfor
     let index = 0
     let tagcount = 0
     for tag in tags
         let index = index + 1
-        let tagAndIndex = {"tag": tag, "taglistindex": index}
-        if match(tag.filename, @%) > -1
+        if tag.filename ==# @%
            let infiletags = add(infiletags, {"tag": tag, "taglistindex": index})
-           let tagcount += 1
         else
-            if GetClassPackage(tag.filename) == "java.lang"
-                let javalangtags = add(javalangtags, tagAndIndex)
-            elseif !a:scope && GetClassPackage(tag.filename) == "java.util"
-                let javalangtags = add(javalangtags, tagAndIndex)
-            elseif has_key(importsmap, Translate_directory(tag.filename)) > 0
-                let inscopetags = add(inscopetags, tagAndIndex)
+            if match(tag.filename, "java/lang") > -1
+                let javalangtags = add(javalangtags, {"tag": tag, "taglistindex": index})
                 let tagcount += 1
-            else
-                let filteredtags = add(filteredtags, tagAndIndex)
+            elseif !a:scope && (match(tag.filename, "java/util") > -1)
+                let javalangtags = add(javalangtags, {"tag": tag, "taglistindex": index})
+                let tagcount += 1
+            elseif has_key(filenamesinscope, tag.filename) > 0
+                let inscopetags = add(inscopetags, {"tag": tag, "taglistindex": index})
+                let tagcount += 1
+            elseif !a:scope
+                let filteredtags = add(filteredtags, {"tag": tag, "taglistindex": index})
+                let tagcount += 1
             endif
         endif
     endfor
     let result = extend(infiletags, inscopetags)
     let result = extend(result, javalangtags)
-    if !a:scope && tagcount < a:maxtags
-        let result = extend(result, thisprojecttags)
-        let result = extend(result, filteredtags)[:a:maxtags-1]
+    if !a:scope
+        let result = extend(result, filteredtags)
     endif
-    return result
+    return result[:(a:maxtags-1)]
 endfunction
 
 " TODO: Pull out into a configuration parameter.
@@ -351,8 +381,32 @@ function! FilterTags(identifier, maxtags, partial)
     return FilterTagsScope(a:identifier, a:maxtags, a:partial, 0)
 endfunction
 
+let tideTagStart = []
 function! JumpToTag(tag, bang, identifier)
-    execute "silent " . (a:tag.taglistindex) . "tag" . a:bang . " " . a:identifier
+    if v:version > 799
+        let command = "silent " . (a:tag.taglistindex) . "tag" . a:bang . " " . a:identifier
+        execute command
+    else
+        let original_file = @%
+        execute "silent e " . fnameescape(a:tag.tag.filename)
+        " Some tag search lines contain additional characters past the $, so
+        " we need to trim those out.
+        let line_end_index = match(a:tag.tag.cmd, "\\$")
+        execute "silent " . substitute(a:tag.tag.cmd[:(line_end_index)], "\\*", "\\\\*", "g")
+        if original_file !=# @%
+            echom(Translate_directory(@%))
+        endif
+    endif
+endfunction
+
+function! TideJumpBackFromTag()
+    if !empty(g:tideTagStart)
+        let positionbuffer = remove(g:tideTagStart, -1)
+        execute "silent e " . positionbuffer.filename
+        call setpos('.', positionbuffer.pos)
+    else
+        echom("Reached end of tide-tag jump list.")
+    endif
 endfunction
 
 " This is used to store the last set of filtered tags
@@ -366,9 +420,13 @@ function! TideJumpTag(identifier, count, bang)
         echo("No tags found.")
         return
     endif
-    let g:lastTagsIndex = min([a:count, len(g:lastTags) - 1])
+    let numtags = len(g:lastTags)
+    let g:lastTagsIndex = min([a:count, numtags - 1])
     let tag = g:lastTags[g:lastTagsIndex]
+    let originalfile = @%
+    call add(g:tideTagStart, {"pos": getcurpos(), "filename":@%})
     call JumpToTag(tag, a:bang, a:identifier)
+    echom("tag " . g:lastTagsIndex+1 . " of " . numtags)
 endfunction
 
 function! GetClass(tag)
@@ -386,12 +444,11 @@ function! TideTselect(identifier, bang)
     let g:lastTags = FilterTagsScope(a:identifier, g:max_tags, 0, 1)
     let g:lastTagsIndex = 0
     if len(g:lastTags) == 0
-        echo("No tags found.")
         return
     endif
     " TODO: Pull this out into a configuration parameter.
     let header = g:lastTags[0].tag.name
-    let todisplay = map(copy(g:lastTags), 'v:key+1 . "\t" . v:val.tag.kind. "\t" . TideDisplayTagInfo(v:val.tag, GetTagSignature(v:val.tag))')
+    let todisplay = map(copy(g:lastTags), 'v:key+1 . "\t" . v:val.tag.kind. "\t" . TideDisplayTagInfo(v:val.tag, GetTagSignature(v:val.tag)) . "\t"')
     let tagliststring = header . "\n" . join(todisplay, "\n") . "\n"
     let selection = input(tagliststring)
     if selection ==# "q" || selection ==# ""
@@ -409,10 +466,7 @@ function! Tidetnext(bang)
     endif
     let g:lastTagsIndex += 1
     let tagIndex = g:lastTags[g:lastTagsIndex]
-    let identifier = tagIndex.tag.name
-    execute "e " . tagIndex.tag.filename
-    normal gg
-    execute tagIndex.tag.cmd
+    call JumpToTag(tagIndex, a:bang, tagIndex.tag.name)
 endfunction
 
 function! Tidetprevious(bang)
@@ -422,14 +476,13 @@ function! Tidetprevious(bang)
     endif
     let g:lastTagsIndex -= 1
     let tagIndex = g:lastTags[g:lastTagsIndex]
-    let identifier = tagIndex.tag.name
-    execute "e " . tagIndex.tag.filename
-    normal gg
-    execute tagIndex.tag.cmd
+    call JumpToTag(tagIndex, a:bang, tagIndex.tag.name)
 endfunction
 
 function! Trim(input_string)
-    return substitute(a:input_string, '^\s*\(.\{-}\)\s*$', '\1', '')
+    " I guess \n doesn't count as whitespace in vim?
+    let result = substitute(substitute(a:input_string, '\v^\s*(.{-})\s*$', '\1', ''), '\v^\n*(.{-})\n*$', '\1', '')
+    return result
 endfunction
 
 function! GetTagSignature(tag)
@@ -439,7 +492,7 @@ function! GetTagSignature(tag)
     if a:tag.kind ==# "c" || a:tag.kind == "m"
         let originalquickfix = getqflist()
         "TODO: Make configurable.
-        let command = "grep -h -A20 " . '"' . tag_line .'" ' . a:tag.filename
+        let command = "grep -F -h -A20 " . '"' . tag_line .'" ' . a:tag.filename
         let lines = []
         for entry in split(system(command), "\n")
             let lines = add(lines, entry)
@@ -493,7 +546,9 @@ function! TideOmniFunction(findstart, base)
         else
             let signature = tag.name
         endif
-        call complete_add({"word": signature})
+        let classname = Translate_directory(tag.filename)
+        " TODO: Make appending the classname a configuration parameter.
+        call complete_add({"word": signature . "{" . classname . "}", "info": classname})
         if complete_check()
             break
         endif
@@ -506,6 +561,8 @@ command! -nargs=1 -complete=tag TideImport call Import("<args>")
 command! TideUnusedImports call TideFindUnusedImports()
 
 command! -nargs=1 -complete=tag -count -bang Tidetag call TideJumpTag("<args>", "<count>", "<bang>")
+command! TideReturnTag call TideJumpBackFromTag()
 command! -nargs=1 -complete=tag -bang Tidetselect call TideTselect("<args>", "<bang>")
 command! -bang Tidetnext call Tidetnext("<bang>")
 command! -bang Tidetprevious call Tidetprevious("<bang>")
+command! TideClearImportsCache call ClearImportsCache()

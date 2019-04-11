@@ -17,6 +17,49 @@ function! Translate_javaclasspath()
     return classpath . java_classpath
 endfunction
 
+function! Generate_package(type, leading_package_name)
+    let fragments = split(expand("%:r"), "/")
+    let classname = fragments[-1]
+    let package_start = 0
+    for fragment in fragments
+        if fragment ==# a:leading_package_name
+            break
+        endif
+        let package_start = package_start + 1
+    endfor
+    let packages = fragments[package_start : -2]
+    let header = ["/\*", " * Copyright (c) 2019, Verizon Media Inc. All rights reserved.", " *\/"]
+    call add(header, "package " . join(packages, ".") . ";")
+    call add(header, "")
+    call add(header, "public " . a:type . " " . classname . " {")
+    call add(header, "}")
+    call append(0, header)
+    normal ddk$b
+endfunction
+
+function! Generate_javadoc()
+    let line = getline(".")
+    let start_nonwhitespace = match(line, "\\S")
+    if start_nonwhitespace > 0
+        let indent = line[0:(start_nonwhitespace-1)]
+    else
+        let indent = ''
+    endif
+    normal {
+    let javadoc = [indent . '/**', indent . ' ' . '*']
+    call add(javadoc, indent . ' ' . '*/')
+    call append(line('.'), javadoc)
+    normal 2j$
+endfunction
+
+augroup java_tedium
+    autocmd!
+    command! ClassHeader call Generate_package("class", "com")
+    command! InterfaceHeader call Generate_package("interface", "com")
+    command! EnumHeader call Generate_package("enum", "com")
+    command! Javadoc call Generate_javadoc()
+augroup END
+
 augroup java_include
     set tags=tags
     autocmd!
@@ -43,27 +86,6 @@ augroup java_make
      command! CopyTestFilename let @+ = expand("%:t:r")
 augroup END
 
-" Defines a collection of commands for making common patterns in Java easier.
-augroup java_generate
-    autocmd!
-    function! GetClassname()
-        let c = @c
-        let @c = expand("%:t:r")
-        normal "cp
-        let @c = c
-    endfunction
-    command! Classname :call GetClassname()
-    " Extracts a variable out of a function signature and creates
-    " a local variable of the same type and name.
-    " So the line:
-    " foo(int x)
-    " becomes
-    " int x =
-    " foo(x)
-    command! ExtractVariable :normal 2yw"_dw0"ay^O<Esc>"app
-    nnoremap <Leader>v :ExtractVariable<CR>
-augroup END
-
 function! Children(className, directory)
     execute 'grep -r --include=*.java "\\(extends\\|implements\\) ' . a:className . '"' . a:directory
 endfunction
@@ -82,18 +104,18 @@ augroup java_search
     " Allows me to jump to the start of a method definition in a class, since
     " all methods are indented 4 spaces in the Java projects I work on.
     " We also don't make use of package-private.
-     nnoremap [[ ?^ \{4\}\S<CR>
-     nnoremap ]] /^ \{4\}\S<CR>
-     vnoremap [[ ?^ \{4\}\S<CR>
-     vnoremap ]] /^ \{4\}\S<CR>
-     onoremap [[ ?^ \{4\}\S<CR>
-     onoremap ]] /^ \{4\}\S<CR>
-     nnoremap [\ ?^ \{4\}}$?e<CR>
-     nnoremap ]\ /^ \{4\}}$/e<CR>
-     vnoremap [\ ?^ \{4\}}$?e<CR>
-     vnoremap ]\ /^ \{4\}}$/e<CR>
-     onoremap [\ ?^ \{4\}}$?e<CR>
-     onoremap ]\ /^ \{4\}}$/e<CR>
+     nnoremap [[ ?^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     nnoremap ]] /^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     vnoremap [[ ?^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     vnoremap ]] /^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     onoremap [[ ?^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     onoremap ]] /^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     nnoremap [\ ?^\( \{4\}\\|\t\)}$?e<CR>
+     nnoremap ]\ /^\( \{4\}\\|\t\)}$/e<CR>
+     vnoremap [\ ?^\( \{4\}\\|\t\)}$?e<CR>
+     vnoremap ]\ /^\( \{4\}\\|\t\)}$/e<CR>
+     onoremap [\ ?^\( \{4\}\\|\t\)}$?e<CR>
+     onoremap ]\ /^\( \{4\}\\|\t\)}$/e<CR>
 
     " Allows me to customize gd to understand Java functions.
      nmap gd "syiw<CR>[[ /<C-R>s<CR>
@@ -105,6 +127,7 @@ augroup java_tags
     " all methods are indented 4 spaces in the Java projects I work on.
     " We also don't make use of package-private.
      nnoremap <C-\> :Tidetag <C-R><C-W><cr>
+     nnoremap <C-Y> :TideReturnTag<cr>
      nnoremap g\ :Tidetselect <C-R><C-W><cr>
      nnoremap g<C-\> :Tidetlist<CR>
      nnoremap <C-n> :Tidetnext<CR>
@@ -133,8 +156,15 @@ augroup END
 " buffer.
 command! MvnRunAllNew enew | r! mvn test
 command! MvnRunAll %d | r! mvn test
-command! MvnRunTestNew enew | r!mvn -q test -Dtest=#:t:r
-command! MvnRunTest %d | r!mvn -q test -Dtest=%:t:r
+command! MvnRunTestNew enew | r!mvn -q test -Dcheckstyle.skip=true -Dspotbugs.skip=true -Dtest=#:t:r
+command! MvnRunTest %d | r!mvn -q test -Dcheckstyle.skip=true -Dspotbugs.skip=true -Dtest=#:t:r
+command! GradleCompile %d | r!./gradlew compileJava compileTestJava
+command! GradleCompileNew enew | r!./gradlew compileJava compileTestJava
+
+augroup deletion
+    command! DeleteJavaMethod normal da{dap
+    nnoremap dm :DeleteJavaMethod<CR>
+augroup END
 
 set formatoptions-=c
 set formatoptions-=r

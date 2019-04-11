@@ -55,7 +55,6 @@ set nohlsearch
 " The computer is not allowed to do things for me.
 set nowrap
 set ruler
-set list
 set expandtab
 set shiftwidth=4
 set tabstop=4
@@ -75,6 +74,7 @@ set splitright
 " set t_Co=0
 " Use :set list! to toggle the nonprinting characters.
 set nolist
+set listchars=eol:$,tab:>-
 
 " Disable the completion popup. It's not really necessary, because there isn't
 " (so far as I know) a way to jump directly to a match. If you need to cycle
@@ -83,19 +83,7 @@ set completeopt=
 set pumheight=1
 set complete=.,b
 
-function! ToggleStatusLine()
-    if (&laststatus == 2)
-        set laststatus=0
-    else
-        set laststatus=2
-    endif
-endfunction
-
-" By default we don't display the status line, but we can turn it on and off
-" if we need it (say to see the git branch/filename or current line number)
-set laststatus=0
-command! ToggleStatusLine :call ToggleStatusLine()<CR>
-
+" Turn off the status line.
 set statusline+=%f:%l:%c;
 
 " Turn off that awful highlighting in the quickfix window
@@ -106,7 +94,7 @@ let g:diff_translations = 0
 
 "Repeating the previous find will be quite useful considering how often I
 "rely on it, but ; is SOOO convenient as the leader key.
-nnoremap \ ;
+nnoremap - ;
 let mapleader = ";"
 
 set title
@@ -138,7 +126,7 @@ set cscopequickfix=s-,c-,d-,i-,t-,e-
 
 " Find all uses of a symbol. Yeah, I know the shortcut doesn't make any sense. It's
 " a holdover from my IntelliJ days.
-nnoremap <Leader>b :cs find s <C-R>=expand("<cword>")<CR><CR>:copen<CR><c-w>k<c-o><c-w>j
+nnoremap <Leader>b :grep -F "<cword>" -r .<CR>
 
 " Open the location list with all identifiers that match the tag under the
 " cursor, without jumping to any of them.
@@ -147,7 +135,7 @@ nnoremap g] :ltag <C-R><C-W><CR>:lopen<CR><c-w>k<c-o><c-w>j
 nnoremap <c-y> :tnext<cr>
 
 " ----------- Grepping -------------------
-set grepprg=grep\ -n\ --exclude=tags\ --exclude=cscope.*\ --exclude=.classpath\ --exclude=.raw-classpath\ --exclude-dir=target\ --exclude-dir=.git\ $*
+set grepprg=grep\ -n\ --exclude=tags\ --exclude=cscope.*\ --exclude=*.class\ --exclude=.classpath\ --exclude=.raw-classpath\ --exclude-dir=target\ --exclude-dir=.git\ $*
 " Don't print the output to the terminal screen. If I want that, I'll run it
 " directly! This applies to both grep and make.
 set shellpipe=&>
@@ -160,7 +148,7 @@ nnoremap <space>d <C-w>c<CR>
 
 "  Commands for navigating buffers and files.
 " Wildcard File search
-nnoremap <Leader>f q:ie **/
+nnoremap <Leader>f q:ie **/<Esc>
 " This allows me to type in the buffer number, and press , to jump to
 " that buffer. I hardly ever use f or t, so I'm not losing much here.
 " Also makes it very easy to flip between the current and alternate buffer.
@@ -191,7 +179,7 @@ command! Trim call TrimWhiteSpace()
 
 augroup trim
     autocmd!
-    au BufWritePre * Trim
+    "au BufWritePre * Trim
 augroup END
 
 " Should start using this instead of Caps Lock as escape, much more VM
@@ -268,12 +256,12 @@ augroup quickfix_file_names
     au FileType qf set conceallevel=2
     au FileType qf set concealcursor=n
     au FileType qf syntax match qfFileName /^.\{-\}\s\s*/ transparent conceal
-    au FileType qf command! ConcealFile :set concealcursor=n
+    au FileType qf command! HideFile :set concealcursor=n
     au FileType qf command! ShowFile :set concealcursor=
     au FileType qf command! Show :set conceallevel=0
     au FileType qf command! Hide :set conceallevel=2
     au BufLeave quickfix set conceallevel=0
-    au BufLeave quickfix delcommand ConcealFile
+    au BufLeave quickfix delcommand HideFile
     au BufLeave quickfix delcommand ShowFile
     au BufLeave quickfix delcommand Show
     au BufLeave quickfix delcommand Hide
