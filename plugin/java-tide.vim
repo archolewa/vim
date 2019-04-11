@@ -276,7 +276,7 @@ function! ClearImportsCache()
     let g:imports_cache = {}
 endfunction
 
-let max_tags = 8
+let max_tags = 20
 " Given an identifier, returns a list of dictionaries containing two entries:
 " 1. tag - A tag that matches the passed in identifier, and is in this project's classpath.
 " 2. taglistindex - The tag's original index in the taglist. This allows us to use
@@ -387,16 +387,26 @@ function! JumpToTag(tag, bang, identifier)
         let command = "silent " . (a:tag.taglistindex) . "tag" . a:bang . " " . a:identifier
         execute command
     else
-        call add(g:tideTagStart, getcurpos())
+        let original_file = @%
         execute "silent e " . fnameescape(a:tag.tag.filename)
-        execute "silent " . substitute(a:tag.tag.cmd, "\\*", "\\\\*", "g")
+        " Some tag search lines contain additional characters past the $, so
+        " we need to trim those out.
+        let line_end_index = match(a:tag.tag.cmd, "\\$")
+        execute "silent " . substitute(a:tag.tag.cmd[:(line_end_index)], "\\*", "\\\\*", "g")
+        if original_file !=# @%
+            echom(Translate_directory(@%))
+        endif
     endif
 endfunction
 
 function! TideJumpBackFromTag()
     if !empty(g:tideTagStart)
-        let newpos = remove(g:tideTagStart, -1)
-        call setpos(newpos)
+        let positionbuffer = remove(g:tideTagStart, -1)
+        execute "silent e " . positionbuffer.filename
+        call setpos('.', positionbuffer.pos)
+    else
+        echom("Reached end of tide-tag jump list.")
+    endif
 endfunction
 
 " This is used to store the last set of filtered tags
@@ -414,10 +424,8 @@ function! TideJumpTag(identifier, count, bang)
     let g:lastTagsIndex = min([a:count, numtags - 1])
     let tag = g:lastTags[g:lastTagsIndex]
     let originalfile = @%
+    call add(g:tideTagStart, {"pos": getcurpos(), "filename":@%})
     call JumpToTag(tag, a:bang, a:identifier)
-    if originalfile !=# @%
-        echom(@%)
-    endif
     echom("tag " . g:lastTagsIndex+1 . " of " . numtags)
 endfunction
 
@@ -440,7 +448,7 @@ function! TideTselect(identifier, bang)
     endif
     " TODO: Pull this out into a configuration parameter.
     let header = g:lastTags[0].tag.name
-    let todisplay = map(copy(g:lastTags), 'v:key+1 . "\t" . v:val.tag.kind. "\t" . TideDisplayTagInfo(v:val.tag, GetTagSignature(v:val.tag))')
+    let todisplay = map(copy(g:lastTags), 'v:key+1 . "\t" . v:val.tag.kind. "\t" . TideDisplayTagInfo(v:val.tag, GetTagSignature(v:val.tag)) . "\t"')
     let tagliststring = header . "\n" . join(todisplay, "\n") . "\n"
     let selection = input(tagliststring)
     if selection ==# "q" || selection ==# ""
@@ -458,10 +466,7 @@ function! Tidetnext(bang)
     endif
     let g:lastTagsIndex += 1
     let tagIndex = g:lastTags[g:lastTagsIndex]
-    let identifier = tagIndex.tag.name
-    execute "e " . tagIndex.tag.filename
-    normal gg
-    execute "silent " . substitute(tagIndex.tag.cmd, "\\*", "\\\\*", "g")
+    call JumpToTag(tagIndex, a:bang, tagIndex.tag.name)
 endfunction
 
 function! Tidetprevious(bang)
@@ -471,10 +476,7 @@ function! Tidetprevious(bang)
     endif
     let g:lastTagsIndex -= 1
     let tagIndex = g:lastTags[g:lastTagsIndex]
-    let identifier = tagIndex.tag.name
-    execute "e " . tagIndex.tag.filename
-    normal gg
-    execute fnameescape(tagIndex.tag.cmd)
+    call JumpToTag(tagIndex, a:bang, tagIndex.tag.name)
 endfunction
 
 function! Trim(input_string)
@@ -490,7 +492,7 @@ function! GetTagSignature(tag)
     if a:tag.kind ==# "c" || a:tag.kind == "m"
         let originalquickfix = getqflist()
         "TODO: Make configurable.
-        let command = "grep -h -A20 " . '"' . tag_line .'" ' . a:tag.filename
+        let command = "grep -F -h -A20 " . '"' . tag_line .'" ' . a:tag.filename
         let lines = []
         for entry in split(system(command), "\n")
             let lines = add(lines, entry)
@@ -544,7 +546,9 @@ function! TideOmniFunction(findstart, base)
         else
             let signature = tag.name
         endif
-        call complete_add({"word": signature})
+        let classname = Translate_directory(tag.filename)
+        " TODO: Make appending the classname a configuration parameter.
+        call complete_add({"word": signature . "{" . classname . "}", "info": classname})
         if complete_check()
             break
         endif

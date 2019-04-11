@@ -104,18 +104,18 @@ augroup java_search
     " Allows me to jump to the start of a method definition in a class, since
     " all methods are indented 4 spaces in the Java projects I work on.
     " We also don't make use of package-private.
-     nnoremap [[ ?^ \{4\}\S<CR>
-     nnoremap ]] /^ \{4\}\S<CR>
-     vnoremap [[ ?^ \{4\}\S<CR>
-     vnoremap ]] /^ \{4\}\S<CR>
-     onoremap [[ ?^ \{4\}\S<CR>
-     onoremap ]] /^ \{4\}\S<CR>
-     nnoremap [\ ?^ \{4\}}$?e<CR>
-     nnoremap ]\ /^ \{4\}}$/e<CR>
-     vnoremap [\ ?^ \{4\}}$?e<CR>
-     vnoremap ]\ /^ \{4\}}$/e<CR>
-     onoremap [\ ?^ \{4\}}$?e<CR>
-     onoremap ]\ /^ \{4\}}$/e<CR>
+     nnoremap [[ ?^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     nnoremap ]] /^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     vnoremap [[ ?^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     vnoremap ]] /^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     onoremap [[ ?^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     onoremap ]] /^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     nnoremap [\ ?^\( \{4\}\\|\t\)}$?e<CR>
+     nnoremap ]\ /^\( \{4\}\\|\t\)}$/e<CR>
+     vnoremap [\ ?^\( \{4\}\\|\t\)}$?e<CR>
+     vnoremap ]\ /^\( \{4\}\\|\t\)}$/e<CR>
+     onoremap [\ ?^\( \{4\}\\|\t\)}$?e<CR>
+     onoremap ]\ /^\( \{4\}\\|\t\)}$/e<CR>
 
     " Allows me to customize gd to understand Java functions.
      nmap gd "syiw<CR>[[ /<C-R>s<CR>
@@ -127,7 +127,7 @@ augroup java_tags
     " all methods are indented 4 spaces in the Java projects I work on.
     " We also don't make use of package-private.
      nnoremap <C-\> :Tidetag <C-R><C-W><cr>
-     nnoremap <C-U> :TideJumpBackFromTag
+     nnoremap <C-Y> :TideReturnTag<cr>
      nnoremap g\ :Tidetselect <C-R><C-W><cr>
      nnoremap g<C-\> :Tidetlist<CR>
      nnoremap <C-n> :Tidetnext<CR>
@@ -158,6 +158,13 @@ command! MvnRunAllNew enew | r! mvn test
 command! MvnRunAll %d | r! mvn test
 command! MvnRunTestNew enew | r!mvn -q test -Dcheckstyle.skip=true -Dspotbugs.skip=true -Dtest=#:t:r
 command! MvnRunTest %d | r!mvn -q test -Dcheckstyle.skip=true -Dspotbugs.skip=true -Dtest=#:t:r
+command! GradleCompile %d | r!./gradlew compileJava compileTestJava
+command! GradleCompileNew enew | r!./gradlew compileJava compileTestJava
+
+augroup deletion
+    command! DeleteJavaMethod normal da{dap
+    nnoremap dm :DeleteJavaMethod<CR>
+augroup END
 
 set formatoptions-=c
 set formatoptions-=r
