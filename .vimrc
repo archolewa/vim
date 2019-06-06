@@ -21,7 +21,7 @@ colorscheme desert
 
 execute pathogen#infect()
 
-set tags=tags
+set tags=./tags,tags,../tags
 
 " Enables matchit, which provides for more sophisticated use of % for
 " matching programming language constructs. Required for
@@ -40,8 +40,7 @@ endif
 filetype indent plugin off
 filetype on
 filetype plugin on
-" I find syntax highlighting to be unnecessary visual stimulation. I don't
-" know that syntax highlighting really contributes much.
+" I find syntax highlighting to be unnecessary visual stimulation.
 syntax off
 set backspace=indent,eol,start
 " Hide buffers instead of closing them. Means I don't have to save before
@@ -60,12 +59,11 @@ set shiftwidth=4
 set tabstop=4
 set shiftround
 set nofoldenable
-highlight ColorColumn ctermbg=8
 set shortmess=atTWAI
 set cmdheight=2
 
 " Run a case insensitive search. By default, run case sensitive searches
-nnoremap <Leader>/ //c
+nnoremap <Leader>/ /\c
 set foldmethod=indent
 set path=.,,
 set incsearch
@@ -102,9 +100,11 @@ set title
 " Wrapping!
 nnoremap <Leader>w vi):s/,/,\r/g<CR>])i<CR><Esc>[(a<CR><Esc>vi)
 
-" Search in current file (d is between s and f on
-" my keyboard, i.e. 'search file'.
-nnoremap <Leader>d :vimgrep <C-r>%<C-f><Esc>F<Space>a
+" Search in current file
+nnoremap <Leader>s :vimgrep <C-r>%<C-f><Esc>F<Space>a
+" Search last visually selected block of text
+nnoremap <Leader>/ /\%V
+vnoremap / <Esc>/\%V
 
 " ------- Code exploration ----------
 
@@ -119,14 +119,18 @@ set cscoperelative
 
 " Putting cscope results in quickfix, which is much friendlier than whatever
 " it uses by default.
-set cscopequickfix=s-,c-,d-,i-,t-,e-
+set cscopequickfix=s-,c-,d-,i-,t-,e-,a-
 
-" At the end of each of these mappings we jump back to the previous jump,
-" because cscope insists on jumping to the first match, and I don't want that.
-
-" Find all uses of a symbol. Yeah, I know the shortcut doesn't make any sense. It's
+" Find all calls of a function. Yeah, I know the shortcut doesn't make any sense. It's
 " a holdover from my IntelliJ days.
-nnoremap <Leader>b :grep -F "<cword>" -r .<CR>
+nnoremap <Leader>b :cs find c <cword><CR>
+" Find all uses of this symbol.
+nnoremap <Leader>c :cs find s <cword><CR>
+" Find where the symbol under the cursor is assigned a value.
+nnoremap <Leader>a :cs find a <cword><CR>
+" Find files including this file. It's not perfect, it won't find files in the
+" same package that use it for example, but it's something.
+nnoremap <Leader>d :grep -l "^import .*<cword>;$" -r . -G .java<CR>
 
 " Open the location list with all identifiers that match the tag under the
 " cursor, without jumping to any of them.
@@ -134,8 +138,15 @@ nnoremap g] :ltag <C-R><C-W><CR>:lopen<CR><c-w>k<c-o><c-w>j
 
 nnoremap <c-y> :tnext<cr>
 
+" From a custom plugin I wrote that just keeps a stack of cursor positions
+" that I can manually push to. Allows me to do nested searches and
+" explorations and still jump back to where I wanted to be.
+nnoremap <Space>p :Push<CR>
+nnoremap <Space>o :Pop<CR>
+
 " ----------- Grepping -------------------
-set grepprg=grep\ -n\ --exclude=tags\ --exclude=cscope.*\ --exclude=*.class\ --exclude=.classpath\ --exclude=.raw-classpath\ --exclude-dir=target\ --exclude-dir=.git\ $*
+set grepprg=ag\ --vimgrep\ -n\ --ignore=.package-map\ --ignore=tags\ --ignore=cscope.*\ --ignore=*.class\ --ignore=.classpath\ --ignore=.raw-classpath\ --ignore=target\ --ignore=.git\ $*
+set grepformat=%f:%l:%c:%m
 " Don't print the output to the terminal screen. If I want that, I'll run it
 " directly! This applies to both grep and make.
 set shellpipe=&>
@@ -148,7 +159,9 @@ nnoremap <space>d <C-w>c<CR>
 
 "  Commands for navigating buffers and files.
 " Wildcard File search
-nnoremap <Leader>f q:ie **/<Esc>
+nnoremap <Leader>f :e **/
+" Ignore class files when opening files.
+set wildignore+=*.class
 " This allows me to type in the buffer number, and press , to jump to
 " that buffer. I hardly ever use f or t, so I'm not losing much here.
 " Also makes it very easy to flip between the current and alternate buffer.

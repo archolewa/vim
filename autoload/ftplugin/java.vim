@@ -96,7 +96,7 @@ augroup java_search
     " Find the class definition of the identifier under the cursor.
     command! -nargs=+ ClassDef :grep -r --include=*.java "class <args>" <args>
     " Jump to parent or interface
-    command! ParentIdentifier execute "/\\(\\<extends\\>\\|\\<implements\\>\\) \\S*" | normal nW
+    command! ParentIdentifier execute "/\\(\\<extends\\>\\|\\<implements\\>\\) \\S* \\?{\\?$" | normal nW
     " Jump to class declaration. The class declaration starts at the access modifier
     " that's"^/s*public fully indented to the left.
     command! ClassDeclaration execute "?^\\(public\\|private\\|protected\\|class\\)" | normal n2W
@@ -104,12 +104,12 @@ augroup java_search
     " Allows me to jump to the start of a method definition in a class, since
     " all methods are indented 4 spaces in the Java projects I work on.
     " We also don't make use of package-private.
-     nnoremap [[ ?^\( \{4\}\\|\t\)[^\s\t{}]<CR>
-     nnoremap ]] /^\( \{4\}\\|\t\)[^\s\t{}]<CR>
-     vnoremap [[ ?^\( \{4\}\\|\t\)[^\s\t{}]<CR>
-     vnoremap ]] /^\( \{4\}\\|\t\)[^\s\t{}]<CR>
-     onoremap [[ ?^\( \{4\}\\|\t\)[^\s\t{}]<CR>
-     onoremap ]] /^\( \{4\}\\|\t\)[^\s\t{}]<CR>
+     nnoremap [[ ?^\( \{4\}\\|\t\)[^ \t{}]<CR>
+     nnoremap ]] /^\( \{4\}\\|\t\)[^ \t{}]<CR>
+     vnoremap [[ ?^\( \{4\}\\|\t\)[^ \t{}]<CR>
+     vnoremap ]] /^\( \{4\}\\|\t\)[^ \t{}]<CR>
+     onoremap [[ ?^\( \{4\}\\|\t\)[^ \t{}]<CR>
+     onoremap ]] /^\( \{4\}\\|\t\)[^ \t{}]<CR>
      nnoremap [\ ?^\( \{4\}\\|\t\)}$?e<CR>
      nnoremap ]\ /^\( \{4\}\\|\t\)}$/e<CR>
      vnoremap [\ ?^\( \{4\}\\|\t\)}$?e<CR>
@@ -149,7 +149,7 @@ endfunction
 augroup java_overview
     autocmd!
     " Display a list of public methods/members.
-     command! Outline :call Outline("^\\s*public")
+     command! Outline :call Outline("^\\s*public\\|protected")
 augroup END
 
 " Defines some commands to make it easy to run maven and dump the results in a
@@ -160,10 +160,12 @@ command! MvnRunTestNew enew | r!mvn -q test -Dcheckstyle.skip=true -Dspotbugs.sk
 command! MvnRunTest %d | r!mvn -q test -Dcheckstyle.skip=true -Dspotbugs.skip=true -Dtest=#:t:r
 command! GradleCompile %d | r!./gradlew compileJava compileTestJava
 command! GradleCompileNew enew | r!./gradlew compileJava compileTestJava
+command! GradleAll %d | r!./gradlew test
+command! GradleAllNew enew | r!./gradlew test
 
 augroup deletion
     command! DeleteJavaMethod normal da{dap
-    nnoremap dm :DeleteJavaMethod<CR>
+    nnoremap dam :DeleteJavaMethod<CR>
 augroup END
 
 set formatoptions-=c

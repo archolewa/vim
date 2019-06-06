@@ -25,7 +25,7 @@
 " and the line at which the imports end.
 function! GetImportGroups()
     let cursor_position = getpos(".")
-    let class_start = search('^\(public\|protected\|private\) \(class\|enum\|interface\)', 'w')
+    let class_start = search('^\(public \|protected \|private \)\?\(class\|enum\|interface\)', 'w')
     let class_docs_start = search('/\*\*', 'bWn')
     if class_docs_start > 0
         let imports_end = class_docs_start
@@ -312,6 +312,11 @@ function! FilterTagsScope(identifier, maxtags, partial, scope)
     endfor
     for group in GetImportGroups()[0]
         for import in group
+            " We ignore static imports. I'll add support for them someday, but
+            " not today.
+            if match(import, "static") >= 0
+                continue
+            endif
             let fully_qualified_class = split(split(split(import)[-1], ';')[0], '\.')
             let package = join(fully_qualified_class[:-2], '.')
             let class = fully_qualified_class[-1]
@@ -426,7 +431,7 @@ function! TideJumpTag(identifier, count, bang)
     let originalfile = @%
     call add(g:tideTagStart, {"pos": getcurpos(), "filename":@%})
     call JumpToTag(tag, a:bang, a:identifier)
-    echom("tag " . g:lastTagsIndex+1 . " of " . numtags)
+    echom("(" . g:lastTagsIndex+1 . " of " . numtags . "): " . @%)
 endfunction
 
 function! GetClass(tag)
