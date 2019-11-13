@@ -17,11 +17,10 @@ au BufRead,BufNewFile *.diff set filetype=diff
 " I use git for backups.
 set noswapfile
 set nobackup
-colorscheme desert
 
 execute pathogen#infect()
 
-set tags=./tags,tags,../tags
+set tags=tags,./tags
 
 " Enables matchit, which provides for more sophisticated use of % for
 " matching programming language constructs. Required for
@@ -34,10 +33,7 @@ if has('python3')
     silent! python3 1
 endif
 
-" I don't like it when a computer tries to do things for me, I'd rather have
-" custom mappings, like a mapping to duplicate the previous line's indent,
-" to handle indenting. Otherwise, I find myself fighting the computer.
-filetype indent plugin off
+filetype indent plugin on
 filetype on
 filetype plugin on
 " I find syntax highlighting to be unnecessary visual stimulation.
@@ -61,11 +57,10 @@ set shiftround
 set nofoldenable
 set shortmess=atTWAI
 set cmdheight=2
-
 " Run a case insensitive search. By default, run case sensitive searches
 nnoremap <Leader>/ /\c
 set foldmethod=indent
-set path=.,,
+set path=.,,~/tide-sources/java/**/,**
 set incsearch
 set splitright
 " Disable all colors
@@ -98,7 +93,7 @@ let mapleader = ";"
 set title
 
 " Wrapping!
-nnoremap <Leader>w vi):s/,/,\r/g<CR>])i<CR><Esc>[(a<CR><Esc>vi)
+nnoremap <Leader>w :ArgWrap<CR>
 
 " Search in current file
 nnoremap <Leader>s :vimgrep <C-r>%<C-f><Esc>F<Space>a
@@ -145,11 +140,13 @@ nnoremap <Space>p :Push<CR>
 nnoremap <Space>o :Pop<CR>
 
 " ----------- Grepping -------------------
-set grepprg=ag\ --vimgrep\ -n\ --ignore=.package-map\ --ignore=tags\ --ignore=cscope.*\ --ignore=*.class\ --ignore=.classpath\ --ignore=.raw-classpath\ --ignore=target\ --ignore=.git\ $*
+set grepprg=rg\ --vimgrep\ --no-messages\ -g!.package-map\ -g!tags\ -g!cscope.*\ -g!*.class\ -g!.classpath\ -g!.raw-classpath\ -g!target\ -g!.git\ $*
 set grepformat=%f:%l:%c:%m
 " Don't print the output to the terminal screen. If I want that, I'll run it
 " directly! This applies to both grep and make.
 set shellpipe=&>
+
+map <Leader>* :grep <cword><CR><CR><CR>
 
 " ---------- Buffer management -----------
 " Close current window, without actually closing the buffer. This gives me the
@@ -158,8 +155,12 @@ set shellpipe=&>
 nnoremap <space>d <C-w>c<CR>
 
 "  Commands for navigating buffers and files.
-" Wildcard File search
-nnoremap <Leader>f :e **/
+" This puts the cursor in front of the double wildcards, instead of after.
+" This makes it easy to wildcard inside a particular sub directory. Useful in
+" large codebases.
+nnoremap <Leader>f :find<Space>
+nnoremap <Leader>e :e **/<Left><Left><Left>
+nnoremap <C-e> :find <C-R><C-W><CR>
 " Ignore class files when opening files.
 set wildignore+=*.class
 " This allows me to type in the buffer number, and press , to jump to
@@ -189,15 +190,6 @@ function! TrimWhiteSpace()
     call setpos(".", pos)
 endfunction
 command! Trim call TrimWhiteSpace()
-
-augroup trim
-    autocmd!
-    "au BufWritePre * Trim
-augroup END
-
-" Should start using this instead of Caps Lock as escape, much more VM
-" friendly.
-inoremap jj <Esc>
 
 " Prompt for whether to create any directories that don't exist when saving,
 " or use w! to just do it.
@@ -242,7 +234,7 @@ let b:match_words='\[:\],<:>,\(:\),{:}'
 " mnemonic for this, because it's optimized for typing speed and ease, since
 " I'll be doing it often. Because I don't want the computer indenting for me.
 " Because I'm weird.
-inoremap jk <Esc>:let x=@/<CR>?^\s*\S<CR>"yy^<c-o>"yP:let @/=x<CR>a
+" inoremap jk <Esc>:let x=@/<CR>?^\s*\S<CR>"yy^<c-o>"yP:let @/=x<CR>a
 
 " Automatically replace double dashes with a single longer dash in prose.
 augroup dash
@@ -309,3 +301,8 @@ nnoremap <Leader>q :FilterQF<Space>
 " git repos), but I don't feel comfortable putting in a public dot file.
 source ~/.vim/private.vim
 
+command! Checkstyle ?^/Users
+
+" Make it easier to pipe a line into the shell and replace it with the output.
+nnoremap <C-s> !!bash<CR>
+inoremap <C-s> <Esc>!!bash<CR>$a

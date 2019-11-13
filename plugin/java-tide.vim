@@ -25,7 +25,7 @@
 " and the line at which the imports end.
 function! GetImportGroups()
     let cursor_position = getpos(".")
-    let class_start = search('^\(public \|protected \|private \)\?\(class\|enum\|interface\)', 'w')
+    let class_start = search('^\(public \|protected \|private \)\?\(abstract \)\?\(final \)\?\(class\|enum\|interface\)', 'w')
     let class_docs_start = search('/\*\*', 'bWn')
     if class_docs_start > 0
         let imports_end = class_docs_start
@@ -167,7 +167,7 @@ function! SelectImport(tagidentifier)
     let tags = map(FilterTags(a:tagidentifier, g:max_import_tags, 0), 'v:val.tag')
     let tags = uniq(filter(tags, 'index(["c", "i", "e", "g"], v:val["kind"]) > -1'))
     let filenames = map(tags, 'v:val["filename"]')
-    let imports = uniq(filter(map(filenames, 'Translate_directory(v:val)'), 'len(v:val)'))
+    let imports = Translate_directory(filenames)
     if len(imports) == 1
         return imports[0]
     else
@@ -185,13 +185,19 @@ endfunction
 " Takes a filename (as a string) and
 " returns the fully-qualified Java name of the class.
 "
-" filename: The name of the file to translate into a fully-qualified name
-" returns A string containing the fully qualified Java class name to import.
+" filename: Either the name of the file to translate into a fully-qualified name, or a list of 
+"   files to translate into a fully-qualified name
+" returns A string (or list of strings) containing the fully qualified Java class name to import.
 function! Translate_directory(filename)
-    let no_extension = fnamemodify(a:filename, ":p:r")
-    let classname = fnamemodify(no_extension, ":t")
-    let package = GetClassPackage(a:filename)
-    return package . "." . classname
+    if type(a:filename) == v:t_list 
+        let classnames = map(a:filename[:], 'fnamemodify(v:val, ":p:t:r")')
+        let packages = GetClassPackage(a:filename)
+        return map(classnames, 'packages[v:key] . "." . v:val')
+    else
+        let classname = fnamemodify(a:filename, ":p:r:t")
+        let package = GetClassPackage(a:filename)
+        return package . "." . classname
+    endif
 endfunction
 
 " Populates the quickfix window with a list of all the
@@ -228,15 +234,32 @@ function! TideFindUnusedImports()
 endfunction!
 
 let package_cache = {}
-" Given a filename, returns the package for the Java class in said file.
+" Given a (list of) filename, returns the package for the Java class in said file.
 function! GetClassPackage(filename)
-    if has_key(g:package_cache, a:filename)
-        return g:package_cache[a:filename]
+    if type(a:filename) == v:t_list 
+        let filenamestosearch = []
+        let packages = []
+        for name in a:filename
+            if has_key(g:package_cache, name)
+                call add(packages, name)
+            else
+                call add(filenamestosearch, name)
+            endif
+        endfor
+        if len(filenamestosearch) > 0 
+            let system_command = 'rg -s --no-messages -w --no-filename -m1 "^package" ' . join(filenamestosearch) . ' | tr -s "\n" | cut -d " " -f2 | cut -d ";" -f1'
+            call extend(packages, systemlist(system_command))
+        endif
+        return packages
+    else
+        if has_key(g:package_cache, a:filename)
+            return g:package_cache[a:filename]
+        endif
+        let system_command  = 'ag -s --silent -w --no-filename -m1 "^package" ' . a:filename . ' | tr -s "\n" | cut -d " " -f2 | cut -d ";" -f1'
+        let package = Trim(system(system_command))
+        let g:package_cache[a:filename] = package
+        return package
     endif
-    let system_command  = 'grep -s -w -h -m1 ^package ' . a:filename . ' | cut -d " " -f2 | cut -d ";" -f1'
-    let package = Trim(system(system_command))
-    let g:package_cache[a:filename] = package
-    return package
 endfunction
 
 function! InScope(filenamesinscope, filename)
@@ -257,9 +280,9 @@ function! AddImportToCache(packages)
     if len(new_packages) == 0
         return
     endif
-    let package_string = '^' . join(new_packages, '\|^')
-    let system_call = 'grep "' . package_string . '" .package-map'
-    for line in split(system(system_call), '\n')
+    let package_string = '^' . join(new_packages, '|^')
+    let system_call = 'rg "' . package_string . '" .package-map'
+    for line in systemlist(system_call)
         let package = split(line)[0]
         let filename = split(line)[1]
         if has_key(g:imports_cache, package)
@@ -497,7 +520,7 @@ function! GetTagSignature(tag)
     if a:tag.kind ==# "c" || a:tag.kind == "m"
         let originalquickfix = getqflist()
         "TODO: Make configurable.
-        let command = "grep -F -h -A20 " . '"' . tag_line .'" ' . a:tag.filename
+        let command = "rg -F --no-filename -A20 " . '"' . tag_line .'" ' . a:tag.filename
         let lines = []
         for entry in split(system(command), "\n")
             let lines = add(lines, entry)
@@ -537,6 +560,16 @@ function! GetTagSignature(tag)
     return tag_line
 endfunction
 
+let searchclass = ''
+
+function! TideSetSearchclass(searchclass)
+    let g:searchclass = a:searchclass
+endfunction
+
+function! TideClearSearchclass()
+    let g:searchclass = ''
+endfunction
+
 function! TideOmniFunction(findstart, base)
     if a:findstart
         normal b
@@ -546,17 +579,19 @@ function! TideOmniFunction(findstart, base)
     let matchingtags = FilterTagsScope(a:base, 40, 1, 1)
     for tagIndex in matchingtags
         let tag = tagIndex.tag
-        if tag.kind ==# "m"
-            let signature = GetTagSignature(tag)
-        else
-            let signature = tag.name
-        endif
-        let classname = Translate_directory(tag.filename)
-        " TODO: Make appending the classname a configuration parameter.
-        call complete_add({"word": signature . "{" . classname . "}", "info": classname})
-        if complete_check()
-            break
-        endif
+        if match(tag.filename, g:searchclass) > -1 
+            if tag.kind ==# "m"
+                let signature = GetTagSignature(tag)
+            else
+                let signature = tag.name
+            endif
+            let classname = Translate_directory(tag.filename)
+            " TODO: Make appending the classname a configuration parameter.
+            call complete_add({"word": signature . "{" . classname . "}", "info": classname})
+            if complete_check()
+                break
+            endif
+        endif 
     endfor
     return []
 endfunction
@@ -571,3 +606,6 @@ command! -nargs=1 -complete=tag -bang Tidetselect call TideTselect("<args>", "<b
 command! -bang Tidetnext call Tidetnext("<bang>")
 command! -bang Tidetprevious call Tidetprevious("<bang>")
 command! TideClearImportsCache call ClearImportsCache()
+
+command! -nargs=1 TideSetSearchclass :call TideSetSearchclass("<args>")
+command! TideClearSearchclass :call TideClearSearchclass()
