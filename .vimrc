@@ -18,9 +18,12 @@ au BufRead,BufNewFile *.diff set filetype=diff
 set noswapfile
 set nobackup
 
+set nocp
+
 execute pathogen#infect()
 
-set tags=tags,./tags
+set tags=./tags,tags
+set showfulltag
 
 " Enables matchit, which provides for more sophisticated use of % for
 " matching programming language constructs. Required for
@@ -67,13 +70,18 @@ set splitright
 " set t_Co=0
 " Use :set list! to toggle the nonprinting characters.
 set nolist
-set listchars=eol:$,tab:>-
+set listchars=eol:$,tab:>-,space:·
 
 " Disable the completion popup. It's not really necessary, because there isn't
 " (so far as I know) a way to jump directly to a match. If you need to cycle
 " through them anyway, might as well cycle through them.
 set completeopt=
 set pumheight=1
+" Not tag completing, because a bug in vim (or maybe Catalina) means that 
+" vim doesn't recognize a tag as sorted, which slows down keyword completion.
+" We can uncomment this when I pull down the latest vim and use that instead
+" of the older homebrew version.
+",t
 set complete=.,b
 
 " Turn off the status line.
@@ -215,8 +223,9 @@ set lazyredraw
 inoremap <c-h> <c-x><c-f>
 " tag completion
 inoremap <c-k> <c-x><c-]>
-" semantic completion
-inoremap <c-l> <c-x><c-o>
+" semantic completion Want <c-l> for parenthesis completion, don't
+" really use this much.
+" inoremap <c-l> <c-x><c-o>
 " keyword completion
 inoremap <c-j> <c-p>
 
@@ -236,12 +245,6 @@ let b:match_words='\[:\],<:>,\(:\),{:}'
 " Because I'm weird.
 " inoremap jk <Esc>:let x=@/<CR>?^\s*\S<CR>"yy^<c-o>"yP:let @/=x<CR>a
 
-" Automatically replace double dashes with a single longer dash in prose.
-augroup dash
-    autocmd!
-    au FileType yaml iabbrev -- &mdash
-augroup END
-
 " -------- Formatting --------
 set nocindent
 " Lets me find lines that are too long, without having to rely on colorcolumn.
@@ -260,7 +263,7 @@ augroup quickfix_file_names
     autocmd!
     au FileType qf set conceallevel=2
     au FileType qf set concealcursor=n
-    au FileType qf syntax match qfFileName /^.\{-\}\s\s*/ transparent conceal
+    au FileType qf syntax match qfFileName /\v^\/[^|]*\// transparent conceal
     au FileType qf command! HideFile :set concealcursor=n
     au FileType qf command! ShowFile :set concealcursor=
     au FileType qf command! Show :set conceallevel=0
@@ -305,4 +308,9 @@ command! Checkstyle ?^/Users
 
 " Make it easier to pipe a line into the shell and replace it with the output.
 nnoremap <C-s> !!bash<CR>
-inoremap <C-s> <Esc>!!bash<CR>$a
+
+" Simple shortcut for generating open close parens.
+inoremap <C-a> ()
+inoremap <C-s> ()<Esc>i
+
+

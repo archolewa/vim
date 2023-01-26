@@ -103,7 +103,7 @@ function! ExtractGroup(import_groups, packages)
             return group
         endif
     endfor
-    echo("ERROR: Unknown group " . string(a:packages))
+    return a:import_groups[0]
 endfunction
 
 " Given a list of import groups, the import to add, and the statement for
@@ -112,7 +112,8 @@ endfunction
 " position.
 function! AddNewImport(import_groups, chosen_import, import_statement)
     " TODO: Pull this out into a user-settable global variable.
-    let group_ordering = ["com.flurry", "com.yahoo", "com", "org", "net", "spock", "antlr", "edu", "io", "gnu", "lombok", "yjava", "java", "javax"]
+    let group_ordering = ["static", "com.yahoo", "com", "org", "net", "java", "javax"]
+    " let group_ordering = ["com.yahoo.uad2", "com.yahoo.digits", "com.yahoo.bard", "com.yahoo", "com", "org", "net", "java", "javax"]
     let group_ordering = map(group_ordering, 'split(v:val, "\\.")')
     let packages = split(a:chosen_import, '\.')
     let new_import_group = ExtractGroup(group_ordering, packages)
@@ -136,6 +137,9 @@ function! AddNewImport(import_groups, chosen_import, import_statement)
 endfunction
 
 function! GetPackages(import_statements)
+    if split(a:import_statements[0])[1] == "static"
+        return ["static"]
+    end
     return split(split(a:import_statements[0])[-1], '\.')[:-2]
 endfunction
 
@@ -194,7 +198,7 @@ function! Translate_directory(filename)
         let packages = GetClassPackage(a:filename)
         return map(classnames, 'packages[v:key] . "." . v:val')
     else
-        let classname = fnamemodify(a:filename, ":p:r:t")
+        let classname = fnamemodify(a:filename, ":p:t:r")
         let package = GetClassPackage(a:filename)
         return package . "." . classname
     endif
@@ -329,10 +333,12 @@ function! FilterTagsScope(identifier, maxtags, partial, scope)
     call AddImportToCache([thispackage])
     " A set of filenames
     let filenamesinscope = {}
-    let filenamesbyclass = g:imports_cache[thispackage]
-    for class in keys(filenamesbyclass)
-        let filenamesinscope[filenamesbyclass[class]] = 1
-    endfor
+    if has_key(g:imports_cache, thispackage)
+        let filenamesbyclass = g:imports_cache[thispackage]
+        for class in keys(filenamesbyclass)
+            let filenamesinscope[filenamesbyclass[class]] = 1
+        endfor
+    endif
     for group in GetImportGroups()[0]
         for import in group
             " We ignore static imports. I'll add support for them someday, but
