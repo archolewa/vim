@@ -1,5 +1,5 @@
 # vim
-Repo containing my vim stuff. At this point, it's just a vimrc. If I ever get around to converting my plugins to submodules, those will be included here too.
+Repo containing my vim stuff. 
 
 Most of the stuff in here are plugins written by others for various languages.
 
